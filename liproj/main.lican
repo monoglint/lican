@@ -1,0 +1,3 @@
+dec main() {
+    io::write("Hello world")
+}
