@@ -1,1 +1,1 @@
-https://github.com/monoglint/lican.wiki.git
+# https://github.com/monoglint/lican/wiki
