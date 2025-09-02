@@ -1,3 +1,1 @@
-dec main() {
-    io::write("Hello world")
-}
+2 + 3 * 5

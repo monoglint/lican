@@ -35,16 +35,18 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
     core::liprocess process(config);
     bool run_success = run(process);
 
-    std::cout << "Diagnostics:\n";
-    for (auto& log : process.logs) {
-        std::cout << log.pretty_debug(process) << '\n';
+    if (process.config._dump_logs) {
+        std::cout << "Logs:\n";
+        for (auto& log : process.logs) {
+            std::cout << log.pretty_debug(process) << '\n';
+        }
     }
 
     if (!run_success)
         return false;
 
     // Debug tokens if everything runs properly.
-    if (process.dump_token_list.has_value()) {
+    if (process.config._dump_token_list && process.dump_token_list.has_value()) {
         std::cout << "Tokens:\n";
         for (auto& token : std::any_cast<std::vector<core::token>>(process.dump_token_list)) {
             std::cout << token.pretty_debug(process) << '\n';
@@ -52,7 +54,7 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
     }
 
     // Debug AST
-    if (process.dump_ast_root.has_value()) {
+    if (process.config._dump_ast && process.dump_ast_root.has_value()) {
         std::cout << "AST:\n";
         std::string buffer(0, ' ');
         auto ast_root_ptr = std::any_cast<std::shared_ptr<core::ast::ast_root>>(process.dump_ast_root);
