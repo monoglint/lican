@@ -12,7 +12,6 @@ add_executable(lican
     src/lex.cpp
     src/parse.cpp
     src/licanapi.cpp
-    src/preprocessor.cpp
     src/core.cpp
     resources/resources.rc
 )

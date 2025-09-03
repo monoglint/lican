@@ -65,36 +65,39 @@ static const std::unordered_map<char, core::token::token_type> character_map = {
 #pragma endregion
 
 struct lex_state {
-    lex_state(core::liprocess& process)
-        : process(process) {}
+    lex_state(core::liprocess& process, const core::t_file_id file_id)
+        : process(process), file_id(file_id), file(process.file_list[file_id]) {}
 
     core::liprocess& process;
+    
+    const core::t_file_id file_id;
+    core::liprocess::lifile& file;
 
     inline char now() const {
-        return process.source_code[pos];
+        return file.source_code[pos];
     }
 
     inline char next() {
-        return process.source_code[pos++];
+        return file.source_code[pos++];
     }
 
     inline char peek(const core::t_pos amount = 1) const {
-        return process.source_code[pos + amount];
+        return file.source_code[pos + amount];
     }
 
     inline bool at_eof() const {
-        return pos >= process.source_code.length();
+        return pos >= file.source_code.length();
     }
 
     core::t_pos pos = 0;
 
     inline core::lisel get_selection() const {
-        return core::lisel(pos);
+        return core::lisel(file_id, pos);
     }
 };
 
-bool core::f::lex(core::liprocess& process) {
-    lex_state state(process);
+bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
+    lex_state state(process, file_id);
 
     auto token_list = std::vector<core::token>();
 
@@ -117,12 +120,12 @@ bool core::f::lex(core::liprocess& process) {
 			}
 
 			if (state.at_eof()) {
-                process.add_log(core::lilog::log_level::ERROR, state.get_selection(), "Unterminated string literal.");
+                process.add_log(liprocess::lilog::log_level::ERROR, state.get_selection(), "Unterminated string literal.");
 
 				break;
 			}
 
-            token_list.emplace_back(token::token_type::STRING, lisel(start_pos, state.pos));
+            token_list.emplace_back(token::token_type::STRING, lisel(state.file_id, start_pos, state.pos));
 
             state.next();
 
@@ -144,7 +147,7 @@ bool core::f::lex(core::liprocess& process) {
 
                 if (state.now() == '.') {
                     if (used_dot)
-                        process.add_log(lilog::log_level::ERROR, lisel(state.pos), "A number can only have one decimal.");
+                        process.add_log(liprocess::lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can only have one decimal.");
 
                     used_dot = true;
                     state.next();
@@ -155,9 +158,9 @@ bool core::f::lex(core::liprocess& process) {
 			}
 
             if (state.peek(-1) == '.')
-                process.add_log(lilog::log_level::ERROR, lisel(state.pos), "A number can't end with a deciaml point.");
+                process.add_log(liprocess::lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can't end with a deciaml point.");
 
-            token_list.emplace_back(token::token_type::NUMBER, lisel(start_pos, state.pos - 1));
+            token_list.emplace_back(token::token_type::NUMBER, lisel(state.file_id, start_pos, state.pos - 1));
 
 			continue;
 		}
@@ -170,12 +173,12 @@ bool core::f::lex(core::liprocess& process) {
 				state.next();
 			}
 
-			auto selection = lisel(start_pos, state.pos - 1);
+			auto selection = lisel(state.file_id, start_pos, state.pos - 1);
 
 			auto identifier_string = process.sub_source_code(selection);
 			
 			if (keyword_map.find(identifier_string) != keyword_map.end()) {
-                token_list.emplace_back(token::token_type::NUMBER, selection);
+                token_list.emplace_back(keyword_map.at(identifier_string), selection);
                 continue;
 			}
 
@@ -186,7 +189,7 @@ bool core::f::lex(core::liprocess& process) {
 
         // Double character tokens.
 		if (!state.at_eof() && double_character_map.find(std::string{current_char, state.peek()}) != double_character_map.end()) {
-            token_list.emplace_back(double_character_map.at(std::string{current_char, state.peek()}), lisel(state.pos, state.pos + 1));
+            token_list.emplace_back(double_character_map.at(std::string{current_char, state.peek()}), lisel(state.file_id, state.pos, state.pos + 1));
 
             state.next(); state.next();
 			continue;
@@ -194,20 +197,20 @@ bool core::f::lex(core::liprocess& process) {
 
 		// Single character tokens.
 		if (character_map.find(current_char) != character_map.end()) {
-            token_list.emplace_back(character_map.at(current_char), state.pos);
+            token_list.emplace_back(character_map.at(current_char), state.get_selection());
 
 			state.next();
 			continue;
 		}
 
-        process.add_log(core::lilog::log_level::ERROR, state.get_selection(), "Invalid token.");
+        process.add_log(core::liprocess::lilog::log_level::ERROR, state.get_selection(), "Invalid token.");
 
         token_list.emplace_back(token::token_type::INVALID, state.get_selection());
 
         state.next();
     }
 
-    process.dump_token_list = std::move(token_list);
+    state.file.dump_token_list = std::move(token_list);
 
     return true;
 }

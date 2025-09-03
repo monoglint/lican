@@ -74,16 +74,14 @@ namespace core {
             RBRACE,
         };
 
-        token(token_type type, core::lisel selection)
+        token(const token_type& type, const core::lisel& selection)
             : type(type), selection(selection) {}
 
-        token_type type;
-        core::lisel selection;
+        const token_type type;
+        const core::lisel selection;
 
         inline std::string pretty_debug(const liprocess& process) {
-            const file_marker& marker = process.get_marker_from_char_pos(selection.start);
-
-            return std::string("[") + selection.pretty_debug(process) + " (" + process.file_list[marker.source_file_id].path + ")]:\t" + (type == token_type::INVALID ? "INVALID" : process.sub_source_code(selection));
+            return std::string("[") + selection.pretty_debug(process) + " (" + process.file_list[selection.file_id].path + ")]:\t" + (type == token_type::INVALID ? "INVALID" : process.sub_source_code(selection));
         }
     };
 }

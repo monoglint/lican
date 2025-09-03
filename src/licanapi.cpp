@@ -10,9 +10,11 @@
 const std::string TEMP_FOLDER_LOCATION = "TEMP_LICAN";
 
 bool run(core::liprocess& process) {
-    if (!core::f::preprocess(process))  return false;
-    if (!core::f::lex(process))         return false;
-    if (!core::f::parse(process))       return false;
+    if (!core::f::init(process))            return false;
+
+    // file_id 0 references the entry point file
+    if (!core::f::lex(process, 0))         return false;
+    if (!core::f::parse(process, 0))       return false;
 
     return true;
 }
@@ -37,7 +39,7 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
 
     if (process.config._dump_logs) {
         std::cout << "Logs:\n";
-        for (auto& log : process.logs) {
+        for (auto& log : process.log_list) {
             std::cout << log.pretty_debug(process) << '\n';
         }
     }
@@ -45,21 +47,21 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
     if (!run_success)
         return false;
 
-    // Debug tokens if everything runs properly.
-    if (process.config._dump_token_list && process.dump_token_list.has_value()) {
-        std::cout << "Tokens:\n";
-        for (auto& token : std::any_cast<std::vector<core::token>>(process.dump_token_list)) {
-            std::cout << token.pretty_debug(process) << '\n';
+    for (auto& file : process.file_list) {
+        if (process.config._dump_token_list && file.dump_token_list.has_value()) {
+            std::cout << "Tokens:\n";
+            for (auto& token : std::any_cast<std::vector<core::token>>(file.dump_token_list)) {
+                std::cout << token.pretty_debug(process) << '\n';
+            }
         }
-    }
 
-    // Debug AST
-    if (process.config._dump_ast && process.dump_ast_root.has_value()) {
-        std::cout << "AST:\n";
-        std::string buffer(0, ' ');
-        auto ast_root_ptr = std::any_cast<std::shared_ptr<core::ast::ast_root>>(process.dump_ast_root);
-        ast_root_ptr->pretty_debug(process, buffer, 0);
-        std::cout << buffer << '\n';
+        if (process.config._dump_ast && file.dump_ast_root.has_value()) {
+            std::cout << "AST:\n";
+            std::string buffer(0, ' ');
+            auto ast_root_ptr = std::any_cast<std::shared_ptr<core::ast::ast_root>>(file.dump_ast_root);
+            ast_root_ptr->pretty_debug(process, buffer, 0);
+            std::cout << buffer << '\n';
+        }
     }
 
     return true;

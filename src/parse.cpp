@@ -5,11 +5,15 @@
 #include "token.hpp"
 
 struct parse_state {
-    parse_state(core::liprocess& process)
-        : process(process), tokens(std::any_cast<std::vector<core::token>>(process.dump_token_list)) {}
+    parse_state(core::liprocess& process, const core::t_file_id file_id)
+        : process(process), file_id(file_id), file(process.file_list[file_id]), tokens(std::any_cast<std::vector<core::token>&>(process.file_list[file_id].dump_token_list)) {}
 
     core::liprocess& process;
-    std::vector<core::token> tokens; // Ref to process property
+
+    core::t_file_id file_id;
+    core::liprocess::lifile& file;
+
+    std::vector<core::token>& tokens; // Ref to process property
 
     core::t_pos pos = 0;
 
@@ -28,7 +32,7 @@ struct parse_state {
     inline const core::token& expect(const core::token::token_type type, const std::string& error_message = "[No Info]") {
         auto& now = next();
         if (now.type != type)
-            process.add_log(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
+            process.add_log(core::liprocess::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
         
         return now;
     }
@@ -157,7 +161,7 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
             break;
     }
 
-    state.process.add_log(core::lilog::log_level::ERROR, now.selection, "Unexpected token.");
+    state.process.add_log(core::liprocess::lilog::log_level::ERROR, now.selection, "Unexpected token.");
 
     return std::make_unique<core::ast::expr_invalid>(now.selection);
 }
@@ -212,8 +216,8 @@ static core::ast::p_stmt parse_statement(parse_state& state) {
     return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
 }
 
-bool core::f::parse(core::liprocess& process) {
-    parse_state state(process);
+bool core::f::parse(core::liprocess& process, const core::t_file_id file_id) {
+    parse_state state(process, file_id);
     auto root = core::ast::ast_root();
     
     while (!state.at_eof()) {
@@ -221,7 +225,7 @@ bool core::f::parse(core::liprocess& process) {
         root.statements.push_back(std::move(stmt));
     }
 
-    process.dump_ast_root = std::any(std::make_shared<core::ast::ast_root>(std::move(root)));
+    state.file.dump_ast_root = std::any(std::make_shared<core::ast::ast_root>(std::move(root)));
 
     return true;
 }
