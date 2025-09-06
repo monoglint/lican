@@ -23,15 +23,24 @@ inline std::string _indent(const uint8_t level) {
 
 namespace core {
     namespace ast {
+        enum class qualifier : uint8_t {
+            CONST,
+            STATIC,
+        };
+        
         enum class node_type : uint8_t {
             ROOT,
 
             EXPR_INVALID,
             EXPR_IDENTIFIER,
             EXPR_LITERAL,
+            EXPR_BINARY,
+            EXPR_TERNARY,
 
             STMT_NONE,
             STMT_IF,
+            STMT_WHILE,
+            STMT_DECLARATION,
             STMT_WRAPPER,
             STMT_BODY,
         };
@@ -100,6 +109,8 @@ namespace core {
                 NUMBER,
                 STRING,
                 CHAR,
+                BOOL,
+                NIL,
             };
 
             expr_literal(const core::lisel& selection, const literal_type type)
@@ -114,7 +125,7 @@ namespace core {
 
         struct expr_binary : expr {
             expr_binary(const core::lisel& selection, p_expr&& left, p_expr&& right, const core::token& opr)
-                : expr(selection, node_type::EXPR_IDENTIFIER), left(std::move(left)), right(std::move(right)), opr(opr) {}
+                : expr(selection, node_type::EXPR_BINARY), left(std::move(left)), right(std::move(right)), opr(opr) {}
 
             const p_expr left;
             const p_expr right;
@@ -127,6 +138,25 @@ namespace core {
                 left->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "right\n";
                 right->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+        
+        struct expr_ternary : expr {
+            expr_ternary(const core::lisel& selection, p_expr& first, p_expr& second, p_expr& third)
+                : expr(selection, node_type::EXPR_TERNARY), first(std::move(first)), second(std::move(second)), third(std::move(third)) {}
+
+            const p_expr first;
+            const p_expr second;
+            const p_expr third;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "expr_ternary\n";
+                buffer += _indent(indent) + "first\n";
+                first->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "second\n";
+                second->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "third\n";
+                third->pretty_debug(process, buffer, indent + 1);
             }
         };
 
@@ -155,6 +185,43 @@ namespace core {
                 consequent->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "alternate:\n";
                 alternate->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+        
+        struct stmt_while : stmt {
+            stmt_while(const core::lisel& selection, p_expr& condition, p_stmt& consequent, p_stmt& alternate)
+                : stmt(selection, node_type::STMT_WHILE), condition(std::move(condition)), consequent(std::move(consequent)), alternate(std::move(alternate)) {}
+
+            const p_expr condition;
+            const p_stmt consequent;
+            const p_stmt alternate; // yes, we have else clauses in while loops
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "stmt_while\n";
+                buffer += _indent(indent) + "condition:\n";
+                condition->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "consequent:\n";
+                consequent->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "alternate:\n";
+                alternate->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+        
+        struct stmt_declaration : stmt {
+            stmt_declaration(const core::lisel& selection, p_expr& name, p_expr& value, std::vector<qualifier>& qualifiers)
+                : stmt(selection, node_type::STMT_DECLARATION), name(std::move(name)), value(std::move(value)), qualifiers(std::move(qualifiers)) {}
+            
+            const p_expr name; // Use p_expr instead of expr_identifier since variables can be declared within scopes.
+            const p_expr value;
+            const std::vector<qualifier> qualifiers;
+            
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "stmt_declaration\n";
+                buffer += _indent(indent) + "name:\n";
+                name->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "value:\n";
+                value->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "qualifiers: [NOT ADDED]\n";
             }
         };
 

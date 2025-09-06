@@ -14,8 +14,8 @@ namespace core {
 
         TRUE,
         FALSE,
-        NIL,        // Lexer will just identify "null" as NIL
-
+        NIL,
+        
         IF,
         ELSE,
         FOR,

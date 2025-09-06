@@ -50,7 +50,7 @@ bool run_chrono(core::liprocess& process) {
 }
 
 bool create_temp_file(const std::string& name, const std::string& content) {    
-    std::ofstream temp(TEMP_FOLDER_LOCATION + PREF_DIR_SEP + name);
+    std::ofstream temp(TEMP_FOLDER_LOCATION + '/' + name);
 
     if (!temp.is_open()) {
         std::cout << "Failed to generate temporary lican file.\n";
@@ -66,9 +66,12 @@ bool create_temp_file(const std::string& name, const std::string& content) {
 bool licanapi::build_project(const licanapi::liconfig_init& config) {
     std::cout << "Building (";
 
-    for (auto& flag : config.flag_list) {
-        std::cout << flag;
-    }
+    if (config.flag_list.size() == 0)
+        std::cout << "NO FLAGS";
+    else
+        for (auto& flag : config.flag_list) {
+            std::cout << flag;
+        }
 
     std::cout << ")\n";
     

@@ -1,6 +1,1 @@
-#mylib.lican
-
-bool main() {
-	io::write("Hello world")
-	return true
-}
+var x = "Hello world"

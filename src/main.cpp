@@ -68,12 +68,26 @@ t_command_data parse_c_style_command(int argc, char* argv[]) {
 
 bool HELP(const t_command_data& command) {
     std::cout << "commands:\n";
-    std::cout << "help                                      Displays this help message.\n";
-    std::cout << "build <path> <entry> <out> -<flags>       Builds the project at <path> with entry point <entry>.\n";
-    std::cout << "write                                     Compiles the given code snippet. Flags are implicitly set for debug mode.\n";
-    std::cout << "stress <chars>                            Compiles a given amount of characters and returns the compilation time.\n";
-    std::cout << "flags                                     Lists all available build flags.\n";
-    std::cout << "exit, quit                                Exits the program.\n";
+
+    std::cout << "help\n";
+    std::cout << "  Displays this help message.\n\n";
+
+    std::cout << "build <path> <entry> <out> -<flags>\n";
+    std::cout << "  Builds the project at <path> with entry point <entry>.\n";
+    std::cout << "  <path> directory is based on CD, but <entry>'s path is always based on <path>.\n\n";
+
+    std::cout << "write\n";
+    std::cout << "  Compiles the given code snippet. Flags are implicitly set for debug mode.\n\n";
+
+    std::cout << "stress <chars>\n";
+    std::cout << "  Compiles a given amount of characters and returns the compilation time.\n\n";
+
+    std::cout << "flags\n";
+    std::cout << "  Lists all available build flags.\n\n";
+
+    std::cout << "exit, quit\n";
+    std::cout << "  Exits the program.\n\n";
+
     return true;
 }
 
@@ -85,7 +99,7 @@ bool BUILD(const t_command_data& command) {
         std::cout << "The project path is not an existing directory.\n";
         return false;
     }
-    if (!std::filesystem::exists(std::string(command[1]) + PREF_DIR_SEP + std::string(command[2]))) {
+    if (!std::filesystem::exists(std::string(command[1]) + '/' + std::string(command[2]))) {
         std::cout << "The given entry point file name does not exist within the project directory.\n";
         return false;
     }

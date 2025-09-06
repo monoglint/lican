@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "constants.hpp"
-
 #define IS_LICANAPI_HPP
 
 #ifdef IS_LICANAPI_HPP
@@ -21,7 +19,7 @@ namespace licanapi {
         liconfig_init() {}
             
         std::string project_path = "lican_temp_project";
-        std::string output_path = std::string("lican_temp_project") + std::to_string(PREF_DIR_SEP) + std::string("out");
+        std::string output_path = std::string("lican_temp_project/out");
 
         // Relative to project path
         std::string entry_point_subpath = "main.lican";
@@ -33,7 +31,7 @@ namespace licanapi {
     struct liconfig {
         liconfig(const liconfig_init init) : 
             project_path(init.project_path), 
-            entry_point_path(init.project_path + PREF_DIR_SEP + init.entry_point_subpath),
+            entry_point_path(init.project_path + '/' + init.entry_point_subpath),
             output_path(init.output_path),
             _dump_token_list(contains_flag(init.flag_list, "-t")),
             _dump_ast(contains_flag(init.flag_list, "-a")),

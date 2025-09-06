@@ -159,6 +159,11 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
             return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::STRING);
         case core::token_type::CHAR:
             return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::CHAR);
+        case core::token_type::FALSE: [[fallthrough]];
+        case core::token_type::TRUE:
+            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::BOOL);
+        case core::token_type::NIL:
+            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::NIL);
         case core::token_type::LPAREN: {
             core::ast::p_expr expr = parse_expression(state);
             state.expect(core::token_type::RPAREN, "Expected ')' after expression.");
@@ -209,8 +214,21 @@ static core::ast::p_expr parse_or(parse_state& state) {
     return binary_expression_left_associative(state, &parse_and, set_or);
 }
 
+static core::ast::p_expr parse_expr_ternary(parse_state& state) {
+    core::ast::p_expr first = parse_or(state);
+    if (state.now().type != core::token_type::QUESTION)
+        return first;
+    
+    state.next();
+    core::ast::p_expr second = parse_expression(state);
+    state.expect(core::token_type::COLON, "Expected a colon.");
+    core::ast::p_expr third = parse_expression(state);
+    
+    return std::make_unique<core::ast::expr_ternary>(core::lisel(first->selection, third->selection), first, second, third);
+}
+
 static core::ast::p_expr parse_assignment(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_or, set_assignment);
+    return binary_expression_left_associative(state, &parse_expr_ternary, set_assignment);
 }
 
 static core::ast::p_expr parse_expression(parse_state& state) {
@@ -233,6 +251,23 @@ static std::unique_ptr<core::ast::stmt_if> parse_stmt_if(parse_state& state) {
     return std::make_unique<core::ast::stmt_if>(core::lisel(if_token.selection, state.now().selection), condition, consequent, alternate);
 }
 
+static std::unique_ptr<core::ast::stmt_while> parse_stmt_while(parse_state& state) {
+    const core::token& while_token = state.next();
+    core::ast::p_expr condition = parse_expression(state);
+    core::ast::p_stmt consequent = parse_statement(state);
+    core::ast::p_stmt alternate;
+
+    // In while loops, else's run if the condition fails on the first time.
+    if (state.now().type == core::token_type::ELSE) {
+        state.next(); // Skip else
+        alternate = parse_statement(state);
+    }
+    else
+        alternate = std::make_unique<core::ast::stmt_none>(state.now().selection);
+
+    return std::make_unique<core::ast::stmt_while>(core::lisel(while_token.selection, state.now().selection), condition, consequent, alternate);
+}
+
 static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state) {
     const core::token& brace_token = state.next();
     std::vector<core::ast::p_stmt> statement_list;
@@ -249,12 +284,25 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.get_current_selection()), statement_list);
 }
 
+static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_variable_declaration(parse_state& state) {
+    const core::token& if_token = state.next();
+    std::vector<core::ast::qualifier> qualifiers = {};
+    
+    core::ast::p_expr name = parse_expr_ternary(state); // Do not let assignment binary expressions mess things up
+    state.expect(core::token_type::EQUAL, "Expected an equals sign after declaration name.");
+    core::ast::p_expr value = parse_expression(state);
+    
+    return std::make_unique<core::ast::stmt_declaration>(core::lisel(if_token.selection, state.get_current_selection()), name, value, qualifiers);
+}
+
 static core::ast::p_stmt parse_statement(parse_state& state) {
     const core::token& tok = state.now();
 
     switch (tok.type) {
         case core::token_type::IF: return parse_stmt_if(state);
+        case core::token_type::WHILE: return parse_stmt_while(state);
         case core::token_type::LBRACE: return parse_stmt_body(state);
+        case core::token_type::VAR: return parse_stmt_variable_declaration(state);
         default:     return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
     }
 }

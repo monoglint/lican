@@ -22,7 +22,7 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"var", core::token_type::VAR},
     {"true", core::token_type::TRUE},
     {"false", core::token_type::FALSE},
-    {"null", core::token_type::NIL},
+    {"nil", core::token_type::NIL},
 };
 
 static const std::unordered_map<std::string, core::token_type> double_character_map = {
