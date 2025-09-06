@@ -113,6 +113,7 @@ struct parse_state {
 // Forward declarations
 static core::ast::p_expr parse_expression(parse_state& state);
 static core::ast::p_stmt parse_statement(parse_state& state);
+static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state);
 
 static core::ast::p_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
     core::ast::p_expr left = lower(state);
@@ -152,7 +153,7 @@ static core::ast::p_expr binary_expression_right_associative(parse_state& state,
     return left;
 }
 
-struct std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
+static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
     std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list;
     
     if (state.peek(1).type == core::token_type::RPAREN)
@@ -164,17 +165,34 @@ struct std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
         const core::token& start_token = state.now();
         
         std::vector<core::ast::parameter_qualifier> qualifiers = {};
-        const auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
+        auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
 
         // Get type later
-        core::ast::p_expr default_value = state.now().type == core::token_type::EQUAL ? parse_expression(state) : std::make_unique<core::ast::expr_none>(state.now().selection);
         
+        core::ast::p_expr default_value;
+
+        if (state.now().type == core::token_type::EQUAL) {
+            state.next();
+            default_value = parse_expression(state);
+        }
+        else
+            default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
+            
+
         parameter_list.emplace_back(std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, qualifiers));
     } while (state.now().type == core::token_type::COMMA);
     
     state.expect(core::token_type::RPAREN, "Expected a closing parenthesis inside parameters list.");
     
     return parameter_list;
+}
+
+static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state& state) {
+    const core::token& start_token = state.now();
+    auto parameter_list = parse_expr_parameter_list(state);
+    std::unique_ptr<core::ast::stmt_body> body = parse_stmt_body(state);
+
+    return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body); 
 }
 
 static core::ast::p_expr parse_primary_expression(parse_state& state) {
@@ -320,21 +338,26 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
     
     core::ast::p_expr name = parse_expr_ternary(state); // Do not let assignment binary expressions mess things up
     
-    switch (state.now().type) {
-        case core::token_type::COLON: {
-            // Handle type stuff later
-            break;
-        }
-        
-        // Parse parameters
-        case core::token_type::LPAREN: {
-            
-            break;
-        }
+    if (state.now().type == core::token_type::COLON) {
+
+        // Handle type stuff later
     }
-    
-    state.expect(core::token_type::EQUAL, "Expected an equals sign after declaration name.");
-    core::ast::p_expr value = parse_expression(state);
+
+    std::cout << std::to_string(static_cast<uint8_t>(state.now().type)) << '\n';
+
+    core::ast::p_expr value;
+
+    switch (state.now().type) {
+        case core::token_type::LPAREN:
+            value = parse_expr_function(state);
+            break;
+        case core::token_type::EQUAL:
+            state.next();
+            value = parse_expression(state);
+            break;
+        default:
+            value = std::make_unique<core::ast::expr_none>(state.now().selection);
+    }
     
     return std::make_unique<core::ast::stmt_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, qualifiers);
 }
