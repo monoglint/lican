@@ -82,14 +82,7 @@ struct lex_state {
     }
 
     inline char peek(const core::t_pos amount = 1) const {
-        if (!is_peek_safe(amount))
-            return '\0';
-        
         return file.source_code[pos + amount];
-    }
-    
-    inline bool is_peek_safe(const core::t_pos amount = 1) const {
-        return pos + amount < file.source_code.length();
     }
 
     inline bool at_eof() const {
@@ -115,20 +108,6 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
         if (liutil::is_whitespace(current_char)) {
             state.next();
             continue;
-        }
-        
-        // Comments
-        if (current_char == '#') {
-            do {
-                state.next();
-            } while (state.now() != '\n');
-        }
-    
-        // Multi-line comments
-        if (current_char == '#' && state.peek(1) == '*') {
-            do {
-                state.next();
-            } while (!(state.now() == '*' && state.peek(1) == '#'));
         }
 
         // Strings

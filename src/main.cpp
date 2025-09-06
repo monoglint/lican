@@ -152,6 +152,7 @@ bool process_command(const t_command_data& command) {
 
 int main(int argc, char* argv[]) {
     std::cout.setf(std::ios::unitbuf);
+
     if (argc > 1) {
         // Inverse bool so true means a successful exit code.
         const t_command_data command = parse_c_style_command(argc, argv);
