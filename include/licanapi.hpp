@@ -26,7 +26,7 @@ namespace licanapi {
         // Relative to project path
         std::string entry_point_subpath = "main.lican";
 
-        std::vector <std::string> flags = {};
+        std::vector <std::string> flag_list = {};
     };
 
     // Scary internal version.
@@ -35,9 +35,10 @@ namespace licanapi {
             project_path(init.project_path), 
             entry_point_path(init.project_path + PREF_DIR_SEP + init.entry_point_subpath),
             output_path(init.output_path),
-            _dump_token_list(contains_flag(init.flags, "-t")),
-            _dump_ast(contains_flag(init.flags, "-a")),
-            _dump_logs(contains_flag(init.flags, "-l")) {}
+            _dump_token_list(contains_flag(init.flag_list, "-t")),
+            _dump_ast(contains_flag(init.flag_list, "-a")),
+            _dump_logs(contains_flag(init.flag_list, "-l")),
+            _dump_chrono(contains_flag(init.flag_list, "-c")) {}
             
         const std::string project_path;
         const std::string output_path;
@@ -48,11 +49,12 @@ namespace licanapi {
         const bool _dump_token_list = false;
         const bool _dump_ast = false;
         const bool _dump_logs = false;
+        const bool _dump_chrono = false;
     };
 
     bool build_project(const liconfig_init& config);
 
-    bool build_code(const std::string& code);
+    bool build_code(const std::string& code, const std::vector<std::string>& flag_list = {});
 }
 
 #undef IS_LICANAPI_HPP

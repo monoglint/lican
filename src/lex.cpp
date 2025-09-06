@@ -9,60 +9,60 @@
 #include "token.hpp"
 #include "util.hpp"
 
-#pragma region maps
-static const std::unordered_map<std::string, core::token::token_type> keyword_map = {
-    {"if", core::token::token_type::IF},
-    {"else", core::token::token_type::ELSE},
-    {"for", core::token::token_type::FOR},
-    {"while", core::token::token_type::WHILE},
-    {"return", core::token::token_type::RETURN},
-    {"break", core::token::token_type::BREAK},
-    {"continue", core::token::token_type::CONTINUE},
-    {"class", core::token::token_type::CLASS},
-    {"dec", core::token::token_type::DEC},
-    {"var", core::token::token_type::VAR},
-    {"true", core::token::token_type::TRUE},
-    {"false", core::token::token_type::FALSE},
-    {"null", core::token::token_type::NIL},
+static const std::unordered_map<std::string, core::token_type> keyword_map = {
+    {"if", core::token_type::IF},
+    {"else", core::token_type::ELSE},
+    {"for", core::token_type::FOR},
+    {"while", core::token_type::WHILE},
+    {"return", core::token_type::RETURN},
+    {"break", core::token_type::BREAK},
+    {"continue", core::token_type::CONTINUE},
+    {"class", core::token_type::CLASS},
+    {"dec", core::token_type::DEC},
+    {"var", core::token_type::VAR},
+    {"true", core::token_type::TRUE},
+    {"false", core::token_type::FALSE},
+    {"null", core::token_type::NIL},
 };
-static const std::unordered_map<std::string, core::token::token_type> double_character_map = {
-    {"&&", core::token::token_type::DOUBLE_AMPERSAND},
-    {"||", core::token::token_type::DOUBLE_PIPE},
-    {"::", core::token::token_type::DOUBLE_COLON},
-    {"==", core::token::token_type::DOUBLE_EQUAL},
-    {"!=", core::token::token_type::BANG_EQUAL},
-    {"<=", core::token::token_type::LESS_EQUAL},
-    {">=", core::token::token_type::GREATER_EQUAL},
-    {"+=", core::token::token_type::PLUS_EQUAL},
-    {"-=", core::token::token_type::MINUS_EQUAL},
-    {"*=", core::token::token_type::ASTERISK_EQUAL},
-    {"/=", core::token::token_type::SLASH_EQUAL},
-    {"%=", core::token::token_type::PERCENT_EQUAL},
-    {"^=", core::token::token_type::CARET_EQUAL},
+
+static const std::unordered_map<std::string, core::token_type> double_character_map = {
+    {"&&", core::token_type::DOUBLE_AMPERSAND},
+    {"||", core::token_type::DOUBLE_PIPE},
+    {"::", core::token_type::DOUBLE_COLON},
+    {"==", core::token_type::DOUBLE_EQUAL},
+    {"!=", core::token_type::BANG_EQUAL},
+    {"<=", core::token_type::LESS_EQUAL},
+    {">=", core::token_type::GREATER_EQUAL},
+    {"+=", core::token_type::PLUS_EQUAL},
+    {"-=", core::token_type::MINUS_EQUAL},
+    {"*=", core::token_type::ASTERISK_EQUAL},
+    {"/=", core::token_type::SLASH_EQUAL},
+    {"%=", core::token_type::PERCENT_EQUAL},
+    {"^=", core::token_type::CARET_EQUAL},
 };
-static const std::unordered_map<char, core::token::token_type> character_map = {
-    {'+', core::token::token_type::PLUS},
-    {'-', core::token::token_type::MINUS},
-    {'*', core::token::token_type::ASTERISK},
-    {'/', core::token::token_type::SLASH},
-    {'%', core::token::token_type::PERCENT},
-    {'^', core::token::token_type::CARET},
-    {'&', core::token::token_type::AMPERSAND},
-    {'|', core::token::token_type::PIPE},
-    {'?', core::token::token_type::QUESTION},
-    {':', core::token::token_type::COLON},
-    {'.', core::token::token_type::DOT},
-    {'=', core::token::token_type::EQUAL},
-    {'!', core::token::token_type::BANG},
-    {'<', core::token::token_type::LESS},
-    {'>', core::token::token_type::GREATER},
-    {'(', core::token::token_type::LPAREN},
-    {')', core::token::token_type::RPAREN},
-    {'{', core::token::token_type::LBRACE},
-    {'}', core::token::token_type::RBRACE},
-    {',', core::token::token_type::COMMA},
+
+static const std::unordered_map<char, core::token_type> character_map = {
+    {'+', core::token_type::PLUS},
+    {'-', core::token_type::MINUS},
+    {'*', core::token_type::ASTERISK},
+    {'/', core::token_type::SLASH},
+    {'%', core::token_type::PERCENT},
+    {'^', core::token_type::CARET},
+    {'&', core::token_type::AMPERSAND},
+    {'|', core::token_type::PIPE},
+    {'?', core::token_type::QUESTION},
+    {':', core::token_type::COLON},
+    {'.', core::token_type::DOT},
+    {'=', core::token_type::EQUAL},
+    {'!', core::token_type::BANG},
+    {'<', core::token_type::LESS},
+    {'>', core::token_type::GREATER},
+    {'(', core::token_type::LPAREN},
+    {')', core::token_type::RPAREN},
+    {'{', core::token_type::LBRACE},
+    {'}', core::token_type::RBRACE},
+    {',', core::token_type::COMMA},
 };
-#pragma endregion
 
 struct lex_state {
     lex_state(core::liprocess& process, const core::t_file_id file_id)
@@ -96,10 +96,11 @@ struct lex_state {
     }
 };
 
-bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
+bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id) {
     lex_state state(process, file_id);
 
-    auto token_list = std::vector<core::token>();
+    std::vector<core::token> token_list;
+    token_list.reserve(state.file.source_code.length() / 1.5);
 
     while (!state.at_eof()) {
         char current_char = state.now();
@@ -111,7 +112,7 @@ bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
 
         // Strings
         if (current_char == '"') {
-            auto start_pos = state.pos;
+            core::t_pos start_pos = state.pos;
 
 			state.next();
 			
@@ -125,7 +126,7 @@ bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
 				break;
 			}
 
-            token_list.emplace_back(token::token_type::STRING, lisel(state.file_id, start_pos, state.pos));
+            token_list.emplace_back(token_type::STRING, lisel(state.file_id, start_pos, state.pos));
 
             state.next();
 
@@ -134,8 +135,8 @@ bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
 
         // Numbers
         if (std::isdigit(current_char) || (current_char == '.' && std::isdigit(state.peek(1)))) {
-			auto start_pos = state.pos;
-			auto used_dot = current_char == '.';
+			core::t_pos start_pos = state.pos;
+			bool used_dot = current_char == '.';
 
             state.next();
 
@@ -160,29 +161,29 @@ bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
             if (state.peek(-1) == '.')
                 process.add_log(liprocess::lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can't end with a deciaml point.");
 
-            token_list.emplace_back(token::token_type::NUMBER, lisel(state.file_id, start_pos, state.pos - 1));
+            token_list.emplace_back(token_type::NUMBER, lisel(state.file_id, start_pos, state.pos - 1));
 
 			continue;
 		}
 
         // Identifiers
 		if (std::isalnum(current_char) || current_char == '_') {
-			auto start_pos = state.pos;
+			core::t_pos start_pos = state.pos;
 
 			while (!state.at_eof() && (std::isalnum(state.now()) || state.now() == '_')) {
 				state.next();
 			}
 
-			auto selection = lisel(state.file_id, start_pos, state.pos - 1);
+			lisel selection(state.file_id, start_pos, state.pos - 1);
 
-			auto identifier_string = process.sub_source_code(selection);
+			std::string identifier_string = process.sub_source_code(selection);
 			
 			if (keyword_map.find(identifier_string) != keyword_map.end()) {
                 token_list.emplace_back(keyword_map.at(identifier_string), selection);
                 continue;
 			}
 
-            token_list.emplace_back(token::token_type::IDENTIFIER, selection);
+            token_list.emplace_back(token_type::IDENTIFIER, selection);
 
 			continue;
 		}
@@ -205,11 +206,12 @@ bool core::f::lex(core::liprocess& process, const core::t_file_id file_id) {
 
         process.add_log(core::liprocess::lilog::log_level::ERROR, state.get_selection(), "Invalid token.");
 
-        token_list.emplace_back(token::token_type::INVALID, state.get_selection());
+        token_list.emplace_back(token_type::INVALID, state.get_selection());
 
         state.next();
     }
 
+    token_list.emplace_back(token_type::_EOF, state.get_selection());
     state.file.dump_token_list = std::move(token_list);
 
     return true;

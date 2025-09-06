@@ -9,17 +9,47 @@
 
 const std::string TEMP_FOLDER_LOCATION = "TEMP_LICAN";
 
+std::pair<bool, std::chrono::milliseconds> measure_func(bool (*func)(core::liprocess&, const core::t_file_id), core::liprocess& process) {
+    std::chrono::time_point start = std::chrono::high_resolution_clock::now();
+    bool result = func(process, 0);
+    std::chrono::duration compilation_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
+
+    return std::make_pair(result, compilation_time);
+}
+
 bool run(core::liprocess& process) {
-    if (!core::f::init(process))            return false;
+    if (!core::frontend::init(process))
+        return false;
 
     // file_id 0 references the entry point file
-    if (!core::f::lex(process, 0))         return false;
-    if (!core::f::parse(process, 0))       return false;
+    if (!core::frontend::lex(process, 0))
+        return false;
+
+    if (!core::frontend::parse(process, 0))
+        return false;
 
     return true;
 }
 
-bool create_temp_file(const std::string& name, const std::string& content) {
+bool run_chrono(core::liprocess& process) {
+    if (!core::frontend::init(process)) return false;
+
+    std::cout << "Starting lexical analysis:\n";
+    auto lex = measure_func(core::frontend::lex, process);
+    std::cout << "Lex time: " << lex.second.count() << "ms\n";
+    if (!lex.first) 
+        return false;
+
+    std::cout << "Starting AST generation:\n";
+    auto parse = measure_func(core::frontend::parse, process);
+    std::cout << "Parse time: " << parse.second.count() << "ms\n"; 
+    if (!parse.first) 
+        return false;
+
+    return true;
+}
+
+bool create_temp_file(const std::string& name, const std::string& content) {    
     std::ofstream temp(TEMP_FOLDER_LOCATION + PREF_DIR_SEP + name);
 
     if (!temp.is_open()) {
@@ -34,8 +64,17 @@ bool create_temp_file(const std::string& name, const std::string& content) {
 }
 
 bool licanapi::build_project(const licanapi::liconfig_init& config) {
+    std::cout << "Building (";
+
+    for (auto& flag : config.flag_list) {
+        std::cout << flag;
+    }
+
+    std::cout << ")\n";
+    
     core::liprocess process(config);
-    bool run_success = run(process);
+    
+    bool run_success = process.config._dump_chrono ? run_chrono(process) : run(process);
 
     if (process.config._dump_logs) {
         std::cout << "Logs:\n";
@@ -67,7 +106,7 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
     return true;
 }
 
-bool licanapi::build_code(const std::string& code) {
+bool licanapi::build_code(const std::string& code, const std::vector<std::string>& flag_list) {
     std::filesystem::create_directory(TEMP_FOLDER_LOCATION);
 
     create_temp_file("main.lican", code);
@@ -80,6 +119,7 @@ bool licanapi::build_code(const std::string& code) {
     licanapi::liconfig_init config;
     config.project_path = TEMP_FOLDER_LOCATION;
     config.entry_point_subpath = "main.lican";
+    config.flag_list = flag_list;
 
     return build_project(config);
 }

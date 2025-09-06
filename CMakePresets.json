@@ -7,15 +7,27 @@
     },
     "configurePresets": [
         {
-        "name": "default",
-        "description": "Default build",
-        "generator": "Ninja",
-        "binaryDir": "${sourceDir}/out",
-        "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Debug",
-            "CMAKE_CXX_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang++.exe",
-            "CMAKE_C_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang"
-        }
+            "name": "release",
+            "description": "Release mode",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang++.exe",
+                "CMAKE_C_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang"
+            }
+        },
+
+        {
+            "name": "debug",
+            "description": "Debug mode",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang++.exe",
+                "CMAKE_C_COMPILER": "C:\\Program Files\\LLVM\\bin\\clang"
+            }
         }
     ]
 }

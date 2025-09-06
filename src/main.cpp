@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <filesystem>
+#include <chrono>
 
 #include "licanapi.hpp"
 #include "core.hpp"
@@ -16,7 +17,6 @@ std::string get_line() {
 
 // written by chatgpt because I'm lazy
 t_command_data parse_string_command(const std::string& line) {
-    std::cout << "separating command\n";
     t_command_data args;
     std::string buffer;
 
@@ -42,11 +42,6 @@ t_command_data parse_string_command(const std::string& line) {
     }
 
     push_buffer(buffer);
-
-    std::cout << "args:\n";
-    for (const auto& arg : args) {
-        std::cout << "Arg: " << arg << '\n';
-    }
 
     return args;
 }
@@ -76,6 +71,7 @@ bool HELP(const t_command_data& command) {
     std::cout << "help                                      Displays this help message.\n";
     std::cout << "build <path> <entry> <out> -<flags>       Builds the project at <path> with entry point <entry>.\n";
     std::cout << "write                                     Compiles the given code snippet. Flags are implicitly set for debug mode.\n";
+    std::cout << "stress <chars>                            Compiles a given amount of characters and returns the compilation time.\n";
     std::cout << "flags                                     Lists all available build flags.\n";
     std::cout << "exit, quit                                Exits the program.\n";
     return true;
@@ -102,7 +98,7 @@ bool BUILD(const t_command_data& command) {
     config.project_path = command[1];
     config.entry_point_subpath = command[2];
     config.output_path = command[3];
-    config.flags = command.size() > 4 ? std::vector<std::string>(command.begin() + 4, command.end()) : std::vector<std::string>();
+    config.flag_list = command.size() > 4 ? std::vector<std::string>(command.begin() + 4, command.end()) : std::vector<std::string>();
 
     licanapi::build_project(config);
 
@@ -110,10 +106,21 @@ bool BUILD(const t_command_data& command) {
 }
 
 bool WRITE(const t_command_data& command) {
+    std::vector<std::string> flag_list = command.size() > 1 ? std::vector<std::string>(command.begin() + 1, command.end()) : std::vector<std::string>();
+
     std::cout << "write a code snippet:\n";
     std::string line = get_line();
 
-    return licanapi::build_code(line);
+    return licanapi::build_code(line, flag_list);
+}
+
+bool STRESS(const t_command_data& command) {
+    if (command.size() != 2)
+        return false;
+
+    std::string buffer(static_cast<size_t>(std::stoull(command[1])), '/');
+
+    return licanapi::build_code(buffer, {"-c"});
 }
 
 bool FLAGS(const t_command_data& command) {
@@ -121,6 +128,7 @@ bool FLAGS(const t_command_data& command) {
     std::cout << "dump-tokens     -t     Dumps the list of tokens generated during lexing.\n";
     std::cout << "dump-ast        -a     Dumps the AST generated during parsing.\n";
     std::cout << "dump-logs       -l     Dumps all logs generated during processing.\n";
+    std::cout << "dump-chrono     -c     Dumps the amount of time it took each stage of the compiler to process.\n";
 
     return true;
 }
@@ -134,6 +142,8 @@ bool process_command(const t_command_data& command) {
         return BUILD(command);
     if (cmd_name == "write")
         return WRITE(command);
+    if (cmd_name == "stress")
+        return STRESS(command);
     if (cmd_name == "flags")
         return FLAGS(command);
     else

@@ -117,15 +117,13 @@ namespace core {
         }
     };
 
-    // frontend
-    namespace f {
+    namespace frontend {
         bool init(liprocess& process);
         bool lex(liprocess& process, const t_file_id file_id);
         bool parse(liprocess& process, const t_file_id file_id);
     }
 
-    // backend
-    namespace b {
+    namespace backend {
 
     }
 }

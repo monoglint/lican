@@ -6,107 +6,113 @@
 
 struct parse_state {
     parse_state(core::liprocess& process, const core::t_file_id file_id)
-        : process(process), file_id(file_id), file(process.file_list[file_id]), tokens(std::any_cast<std::vector<core::token>&>(process.file_list[file_id].dump_token_list)) {}
+        : process(process), file_id(file_id), file(process.file_list[file_id]), token_list(std::any_cast<std::vector<core::token>&>(process.file_list[file_id].dump_token_list)) {}
 
     core::liprocess& process;
 
     core::t_file_id file_id;
     core::liprocess::lifile& file;
 
-    std::vector<core::token>& tokens; // Ref to process property
+    std::vector<core::token>& token_list; // Ref to process property
 
     core::t_pos pos = 0;
 
     inline const core::token& now() const {
-        return tokens.at(pos);
+        return token_list.at(pos);
     }
 
-    inline core::token& next() {
-        return tokens.at(pos++);
+    inline const core::token& next() {
+        if (at_eof())
+            return now();
+
+        return token_list.at(pos++);
     }
 
     inline bool at_eof() const {
-        return pos >= tokens.size();
+        return pos >= token_list.size() - 1;
     }
 
-    inline const core::token& expect(const core::token::token_type type, const std::string& error_message = "[No Info]") {
-        auto& now = next();
+    inline const core::token& expect(const core::token_type type, const std::string& error_message = "[No Info]") {
+        const core::token& now = next();
         if (now.type != type)
             process.add_log(core::liprocess::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
         
         return now;
     }
+
+    inline core::lisel get_current_selection() const {
+        if (at_eof())
+            return std::prev(token_list.end())->selection;
+        return now().selection;
+    }
 };
 
 using t_p_expression_function = core::ast::p_expr(*)(parse_state& state);
-using t_binary_operator_set = std::unordered_set<core::token::token_type>;
+using t_binary_operator_set = std::unordered_set<core::token_type>;
 
-#pragma region binary operator sets
 static const t_binary_operator_set set_scope_resolution = {
-    core::token::token_type::DOUBLE_COLON
+    core::token_type::DOUBLE_COLON
 };
 
 static const t_binary_operator_set set_member_access = {
-    core::token::token_type::DOT
+    core::token_type::DOT
 };
 
 static const t_binary_operator_set set_exponential = {
-    core::token::token_type::CARET
+    core::token_type::CARET
 };
 
 static const t_binary_operator_set set_multiplicative = {
-    core::token::token_type::ASTERISK,
-    core::token::token_type::SLASH,
-    core::token::token_type::PERCENT
+    core::token_type::ASTERISK,
+    core::token_type::SLASH,
+    core::token_type::PERCENT
 };
 
 static const t_binary_operator_set set_additive = {
-    core::token::token_type::PLUS,
-    core::token::token_type::MINUS
+    core::token_type::PLUS,
+    core::token_type::MINUS
 };
 
 static const t_binary_operator_set set_numeric_comparison = {
-    core::token::token_type::LESS,
-    core::token::token_type::LESS_EQUAL,
-    core::token::token_type::GREATER,
-    core::token::token_type::GREATER_EQUAL
+    core::token_type::LESS,
+    core::token_type::LESS_EQUAL,
+    core::token_type::GREATER,
+    core::token_type::GREATER_EQUAL
 };
 
 static const t_binary_operator_set set_direct_comparison = {
-    core::token::token_type::DOUBLE_EQUAL,
-    core::token::token_type::BANG_EQUAL
+    core::token_type::DOUBLE_EQUAL,
+    core::token_type::BANG_EQUAL
 };
 
 static const t_binary_operator_set set_and = {
-    core::token::token_type::DOUBLE_AMPERSAND
+    core::token_type::DOUBLE_AMPERSAND
 };
 
 static const t_binary_operator_set set_or = {
-    core::token::token_type::DOUBLE_PIPE
+    core::token_type::DOUBLE_PIPE
 };
 
 static const t_binary_operator_set set_assignment = {
-    core::token::token_type::EQUAL,
-    core::token::token_type::PLUS_EQUAL,
-    core::token::token_type::MINUS_EQUAL,
-    core::token::token_type::ASTERISK_EQUAL,
-    core::token::token_type::SLASH_EQUAL,
-    core::token::token_type::PERCENT_EQUAL,
-    core::token::token_type::CARET_EQUAL
+    core::token_type::EQUAL,
+    core::token_type::PLUS_EQUAL,
+    core::token_type::MINUS_EQUAL,
+    core::token_type::ASTERISK_EQUAL,
+    core::token_type::SLASH_EQUAL,
+    core::token_type::PERCENT_EQUAL,
+    core::token_type::CARET_EQUAL
 };
 
-#pragma endregion
-#pragma region binary functions
-
-// Forward declaration
+// Forward declarations
 static core::ast::p_expr parse_expression(parse_state& state);
+static core::ast::p_stmt parse_statement(parse_state& state);
 
 static core::ast::p_expr binary_expression(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
-    auto left = lower(state);
+    core::ast::p_expr left = lower(state);
 
     while (!state.at_eof() && set.find(state.now().type) != set.end()) {
-        auto& opr = state.next();
-        auto right = lower(state);
+        const core::token& opr = state.next();
+        core::ast::p_expr right = lower(state);
 
         left = std::make_unique<core::ast::expr_binary>(
             core::lisel(left->selection, right->selection),
@@ -120,13 +126,13 @@ static core::ast::p_expr binary_expression(parse_state& state, const t_p_express
 }
 
 static core::ast::p_expr binary_expression_right(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
-    auto left = lower(state);
+    core::ast::p_expr left = lower(state);
 
     if (!state.at_eof() && set.find(state.now().type) != set.end()) {
-        auto& opr = state.next();
+        const core::token& opr = state.next();
 
         // recurse on *binary_expression* instead of just *lower*
-        auto right = binary_expression_right(state, lower, set);
+        core::ast::p_expr right = binary_expression_right(state, lower, set);
 
         return std::make_unique<core::ast::expr_binary>(
             core::lisel(left->selection, right->selection),
@@ -138,35 +144,33 @@ static core::ast::p_expr binary_expression_right(parse_state& state, const t_p_e
 
     return left;
 }
-#pragma endregion
 
 static core::ast::p_expr parse_primary_expression(parse_state& state) {
-    auto& now = state.next();
+    const core::token& tok = state.next();
 
-    switch (now.type) {
-        case core::token::token_type::IDENTIFIER:
-            return std::make_unique<core::ast::expr_identifier>(now.selection);
-        case core::token::token_type::NUMBER:
-            return std::make_unique<core::ast::expr_literal>(now.selection, core::ast::expr_literal::literal_type::NUMBER);
-        case core::token::token_type::STRING:
-            return std::make_unique<core::ast::expr_literal>(now.selection, core::ast::expr_literal::literal_type::STRING);
-        case core::token::token_type::CHAR:
-            return std::make_unique<core::ast::expr_literal>(now.selection, core::ast::expr_literal::literal_type::CHAR);
-        case core::token::token_type::LPAREN: {
-            auto expr = parse_expression(state);
-            state.expect(core::token::token_type::RPAREN, "Expected ')' after expression.");
+    switch (tok.type) {
+        case core::token_type::IDENTIFIER:
+            return std::make_unique<core::ast::expr_identifier>(tok.selection);
+        case core::token_type::NUMBER:
+            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::NUMBER);
+        case core::token_type::STRING:
+            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::STRING);
+        case core::token_type::CHAR:
+            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::CHAR);
+        case core::token_type::LPAREN: {
+            core::ast::p_expr expr = parse_expression(state);
+            state.expect(core::token_type::RPAREN, "Expected ')' after expression.");
             return expr;
         }
         default:
             break;
     }
 
-    state.process.add_log(core::liprocess::lilog::log_level::ERROR, now.selection, "Unexpected token.");
+    state.process.add_log(core::liprocess::lilog::log_level::ERROR, tok.selection, "Unexpected token.");
 
-    return std::make_unique<core::ast::expr_invalid>(now.selection);
+    return std::make_unique<core::ast::expr_invalid>(tok.selection);
 }
 
-#pragma region binary shit
 static core::ast::p_expr parse_scope_resolution(parse_state& state) {
     return binary_expression(state, &parse_primary_expression, set_scope_resolution);
 }
@@ -206,23 +210,59 @@ static core::ast::p_expr parse_or(parse_state& state) {
 static core::ast::p_expr parse_assignment(parse_state& state) {
     return binary_expression(state, &parse_or, set_assignment);
 }
-#pragma endregion
 
 static core::ast::p_expr parse_expression(parse_state& state) {
     return parse_assignment(state);
 }
 
-static core::ast::p_stmt parse_statement(parse_state& state) {
-    return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
+static std::unique_ptr<core::ast::stmt_if> parse_stmt_if(parse_state& state) {
+    const core::token& if_token = state.next();
+    core::ast::p_expr condition = parse_expression(state);
+    core::ast::p_stmt consequent = parse_statement(state);
+    core::ast::p_stmt alternate;
+
+    if (state.now().type == core::token_type::ELSE) {
+        state.next(); // Skip else
+        alternate = parse_statement(state);
+    }
+    else
+        alternate = std::make_unique<core::ast::stmt_none>(state.now().selection);
+
+    return std::make_unique<core::ast::stmt_if>(core::lisel(if_token.selection, state.now().selection), condition, consequent, alternate);
 }
 
-bool core::f::parse(core::liprocess& process, const core::t_file_id file_id) {
+static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state) {
+    const core::token& brace_token = state.next();
+    std::vector<core::ast::p_stmt> statement_list;
+
+    while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
+        statement_list.emplace_back(parse_statement(state));
+    }
+
+    if (state.at_eof())
+        state.process.add_log(core::liprocess::lilog::log_level::ERROR, state.get_current_selection(), "Expected right brace, got EOF.");
+    else
+        state.next();
+        
+    return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.get_current_selection()), statement_list);
+}
+
+static core::ast::p_stmt parse_statement(parse_state& state) {
+    const core::token& tok = state.now();
+
+    switch (tok.type) {
+        case core::token_type::IF: return parse_stmt_if(state);
+        case core::token_type::LBRACE: return parse_stmt_body(state);
+        default:     return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
+    }
+}
+
+bool core::frontend::parse(core::liprocess& process, const core::t_file_id file_id) {
     parse_state state(process, file_id);
     auto root = core::ast::ast_root();
     
     while (!state.at_eof()) {
-        auto stmt = parse_statement(state);
-        root.statements.push_back(std::move(stmt));
+        root.statement_list.emplace_back(parse_statement(state));
     }
 
     state.file.dump_ast_root = std::any(std::make_shared<core::ast::ast_root>(std::move(root)));

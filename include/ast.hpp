@@ -23,17 +23,20 @@ inline std::string _indent(const uint8_t level) {
 
 namespace core {
     namespace ast {
+        enum class node_type : uint8_t {
+            ROOT,
+
+            EXPR_INVALID,
+            EXPR_IDENTIFIER,
+            EXPR_LITERAL,
+
+            STMT_NONE,
+            STMT_IF,
+            STMT_WRAPPER,
+            STMT_BODY,
+        };
+
         struct node {
-            enum class node_type : uint8_t {
-                ROOT,
-
-                EXPR_INVALID,
-                EXPR_IDENTIFIER,
-                EXPR_LITERAL,
-
-                STMT_WRAPPER,
-            };
-
             node(const core::lisel& selection, const node_type type)
                 : selection(selection), type(type) {}
 
@@ -45,12 +48,12 @@ namespace core {
             }
         };
 
-        struct stmt : public node {
+        struct stmt : node {
             stmt(const core::lisel& selection, const node_type type)
                 : node(selection, type) {}
         };
 
-        struct expr : public node {
+        struct expr : node {
             expr(const core::lisel& selection, const node_type type)
                 : node(selection, type) {}
         };
@@ -62,19 +65,19 @@ namespace core {
             ast_root()
                 : node(core::lisel(0, 0), node_type::ROOT) {}
 
-            std::vector<p_stmt> statements;
+            std::vector<p_stmt> statement_list;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "lican/ast_root : node\n";
                 buffer += _indent(indent++) + "statements:\n";
 
-                for (const auto& stmt : statements) {
+                for (const p_stmt& stmt : statement_list) {
                     stmt->pretty_debug(process, buffer, indent);
                 }
             }
         };
 
-        struct expr_invalid : public expr {
+        struct expr_invalid : expr {
             expr_invalid(const core::lisel& selection)
                 : expr(selection, node_type::EXPR_INVALID) {}
             
@@ -83,7 +86,7 @@ namespace core {
             }
         };
 
-        struct expr_identifier : public expr {
+        struct expr_identifier : expr {
             expr_identifier(const core::lisel& selection)
                 : expr(selection, node_type::EXPR_IDENTIFIER) {}
 
@@ -92,7 +95,7 @@ namespace core {
             }
         };
 
-        struct expr_literal : public expr {
+        struct expr_literal : expr {
             enum class literal_type : uint8_t {
                 NUMBER,
                 STRING,
@@ -109,7 +112,7 @@ namespace core {
             }
         };
 
-        struct expr_binary : public expr {
+        struct expr_binary : expr {
             expr_binary(const core::lisel& selection, p_expr&& left, p_expr&& right, const core::token& opr)
                 : expr(selection, node_type::EXPR_IDENTIFIER), left(std::move(left)), right(std::move(right)), opr(opr) {}
 
@@ -127,7 +130,35 @@ namespace core {
             }
         };
 
-        struct stmt_wrapper : public stmt {
+        struct stmt_none : stmt {
+            stmt_none(const core::lisel& selection)
+                : stmt(selection, node_type::STMT_NONE) {}
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "NONE\n"; 
+            }
+        };
+
+        struct stmt_if : stmt {
+            stmt_if(const core::lisel& selection, p_expr& condition, p_stmt& consequent, p_stmt& alternate)
+                : stmt(selection, node_type::STMT_IF), condition(std::move(condition)), consequent(std::move(consequent)), alternate(std::move(alternate)) {}
+
+            const p_expr condition;
+            const p_stmt consequent;
+            const p_stmt alternate;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "stmt_if\n";
+                buffer += _indent(indent) + "condition:\n";
+                condition->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "consequent:\n";
+                consequent->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "alternate:\n";
+                alternate->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+
+        struct stmt_wrapper : stmt {
             stmt_wrapper(p_expr&& expression)
                 : stmt(expression->selection, node_type::STMT_WRAPPER), expression(std::move(expression)) {}
 
@@ -136,6 +167,22 @@ namespace core {
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "stmt_wrapper\n";
                 expression->pretty_debug(process, buffer, indent);
+            }
+        };
+
+        struct stmt_body : stmt {
+            stmt_body(const core::lisel& selection, std::vector<p_stmt>& statement_list)
+                : stmt(selection, node_type::ROOT), statement_list(std::move(statement_list)) {}
+
+            std::vector<p_stmt> statement_list;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "stmt_body : node\n";
+                buffer += _indent(indent++) + "statements:\n";
+
+                for (const p_stmt& stmt : statement_list) {
+                    stmt->pretty_debug(process, buffer, indent);
+                }
             }
         };
     }
