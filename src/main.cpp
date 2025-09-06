@@ -147,6 +147,12 @@ bool FLAGS(const t_command_data& command) {
     return true;
 }
 
+bool VERSION(const t_command_data& command) {
+    std::cout << "lican v0.0.0-alpha\n";
+    std::cout << "licancli v0.1.0-rc\n";
+    return true;
+}
+
 bool process_command(const t_command_data& command) {
     std::string cmd_name = command[0];
 
@@ -160,8 +166,10 @@ bool process_command(const t_command_data& command) {
         return STRESS(command);
     if (cmd_name == "flags")
         return FLAGS(command);
-    else
-        return HELP(command);
+    if (cmd_name == "version")
+        return VERSION(command);
+    
+    return HELP(command);
 }
 
 int main(int argc, char* argv[]) {
