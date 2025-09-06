@@ -1,0 +1,129 @@
+// Contains all of the needed structures and data for the internal functionalities of the compiler.
+// Used by all stages of the compiler.
+// Holds the declarations for all of the stages of the compiler.
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <any>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+
+#include "licanapi.hpp"
+
+namespace core {
+    using t_file_id = int16_t;
+    using t_pos = uint32_t;
+
+    struct liprocess;
+
+    // Displays information AS IS. Do not pivot to display to the user. All pivoting is handled implicitly.
+    struct lisel {
+        lisel(const t_file_id file_id, const t_pos start, const t_pos end)
+            : file_id(file_id), start(start), end(end) {}
+
+        lisel(const t_file_id file_id,const t_pos position)
+            : file_id(file_id), start(position), end(position) {}
+
+        lisel(const lisel& other0, const lisel& other1)
+            : file_id(other0.file_id), start(other0.start), end(other1.end) {}
+
+        t_pos start;
+        t_pos end;
+        t_file_id file_id;
+        
+        // Downshift operator
+        inline lisel operator-(t_pos amount) const {
+            return lisel(start - amount, end - amount);
+        }
+        // Upshift operator
+        inline lisel operator+(t_pos amount) const {
+            return lisel(start + amount, end + amount);
+        }
+
+        inline lisel& operator++() {
+            start++;
+            end++;
+
+            return *this;
+        }
+
+        inline t_pos length() const {
+            return end - start;
+        }
+
+        std::string pretty_debug(const liprocess& process) const;
+    };
+
+    struct liprocess {
+        struct lifile {
+            lifile(const std::string& path, const std::string& source_code)
+                : path(path), source_code(source_code) {}
+
+            const std::string path;
+            const std::string source_code;
+
+            // Data dump - avoids additional header dependencies. Decast as needed
+            std::any dump_token_list;                   // std::vector<token>
+            std::any dump_ast_root;                     // std::shared_ptr<ast::ast_root>
+        };
+
+        struct lilog {
+            enum class log_level : uint8_t {
+                LOG,
+                WARNING,
+                ERROR
+            };
+
+            lilog(const log_level level, const lisel& selection, const std::string& message)
+                : level(level), selection(selection), message(message) {}
+
+            const log_level level;
+            const lisel selection;
+            const std::string message;
+
+            std::string pretty_debug(const liprocess& process) const;
+        };
+
+        liprocess(const licanapi::liconfig_init& config_init)
+            : config(config_init) {}
+
+        const licanapi::liconfig config;
+        
+        std::vector<lilog> log_list;
+        std::vector<lifile> file_list;
+
+        inline bool add_file(const std::string& path) {
+            std::ifstream file(path);
+
+            if (!file.is_open())
+                return false;   // EVIL
+
+            const std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+            file_list.emplace_back(path, contents);
+
+            return true;
+        }
+
+        inline void add_log(const lilog::log_level level, const lisel& selection, const std::string& message) {
+            log_list.emplace_back(level, selection, message);
+        }
+
+        inline std::string sub_source_code(const lisel& selection) const {
+            return file_list[selection.file_id].source_code.substr(selection.start, selection.end - selection.start + 1);
+        }
+    };
+
+    namespace frontend {
+        bool init(liprocess& process);
+        bool lex(liprocess& process, const t_file_id file_id);
+        bool parse(liprocess& process, const t_file_id file_id);
+    }
+
+    namespace backend {
+
+    }
+}

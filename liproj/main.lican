@@ -1,0 +1,6 @@
+#mylib.lican
+
+bool main() {
+	io::write("Hello world")
+	return true
+}
