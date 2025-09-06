@@ -107,7 +107,6 @@ static const t_binary_operator_set set_assignment = {
 static core::ast::p_expr parse_expression(parse_state& state);
 static core::ast::p_stmt parse_statement(parse_state& state);
 
-<<<<<<< HEAD
 static core::ast::p_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
     core::ast::p_expr left = lower(state);
 
