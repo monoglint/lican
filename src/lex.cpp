@@ -19,7 +19,6 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"continue", core::token_type::CONTINUE},
     {"class", core::token_type::CLASS},
     {"dec", core::token_type::DEC},
-    {"var", core::token_type::VAR},
     {"true", core::token_type::TRUE},
     {"false", core::token_type::FALSE},
     {"nil", core::token_type::NIL},
@@ -82,7 +81,14 @@ struct lex_state {
     }
 
     inline char peek(const core::t_pos amount = 1) const {
+        if (!is_peek_safe(amount))
+            return file.source_code[file.source_code.length() - 1];
+        
         return file.source_code[pos + amount];
+    }
+    
+    inline bool is_peek_safe(const core::t_pos amount = 1) const {
+        return pos + amount < file.source_code.length();
     }
 
     inline bool at_eof() const {

@@ -26,11 +26,8 @@ namespace core {
         CONTINUE,
         CLASS,
 
-        // Function declaration
+        // Variable and function declaration
         DEC,
-
-        // Variable declaration
-        VAR,
 
         COLON,
 
