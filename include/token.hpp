@@ -49,7 +49,9 @@ namespace core {
         DOUBLE_AMPERSAND,
         DOUBLE_PIPE,
         DOUBLE_COLON,
-
+        DOUBLE_PLUS,
+        DOUBLE_MINUS,
+        
         EQUAL,
         DOUBLE_EQUAL,
         BANG,

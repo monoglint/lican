@@ -38,6 +38,8 @@ static const std::unordered_map<std::string, core::token_type> double_character_
     {"/=", core::token_type::SLASH_EQUAL},
     {"%=", core::token_type::PERCENT_EQUAL},
     {"^=", core::token_type::CARET_EQUAL},
+    {"++", core::token_type::DOUBLE_PLUS},
+    {"--", core::token_type::DOUBLE_MINUS},
 };
 
 static const std::unordered_map<char, core::token_type> character_map = {

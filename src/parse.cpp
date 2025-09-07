@@ -7,52 +7,64 @@
 struct parse_state;
 
 using t_p_expression_function = core::ast::p_expr(*)(parse_state& state);
-using t_binary_operator_set = std::unordered_set<core::token_type>;
+using t_operator_set = std::unordered_set<core::token_type>;
 
-static const t_binary_operator_set set_scope_resolution = {
+static const t_operator_set set_scope_resolution = {
     core::token_type::DOUBLE_COLON
 };
 
-static const t_binary_operator_set set_member_access = {
+static const t_operator_set set_member_access = {
     core::token_type::DOT
 };
 
-static const t_binary_operator_set set_exponential = {
+static const t_operator_set set_unary_post = {
+    core::token_type::DOUBLE_PLUS,
+    core::token_type::DOUBLE_MINUS
+};
+
+static const t_operator_set set_unary_pre = {
+    core::token_type::MINUS,
+    core::token_type::BANG,
+    core::token_type::DOUBLE_PLUS,
+    core::token_type::DOUBLE_MINUS
+};
+
+static const t_operator_set set_exponential = {
     core::token_type::CARET
 };
 
-static const t_binary_operator_set set_multiplicative = {
+static const t_operator_set set_multiplicative = {
     core::token_type::ASTERISK,
     core::token_type::SLASH,
     core::token_type::PERCENT
 };
 
-static const t_binary_operator_set set_additive = {
+static const t_operator_set set_additive = {
     core::token_type::PLUS,
     core::token_type::MINUS
 };
 
-static const t_binary_operator_set set_numeric_comparison = {
+static const t_operator_set set_numeric_comparison = {
     core::token_type::LESS,
     core::token_type::LESS_EQUAL,
     core::token_type::GREATER,
     core::token_type::GREATER_EQUAL
 };
 
-static const t_binary_operator_set set_direct_comparison = {
+static const t_operator_set set_direct_comparison = {
     core::token_type::DOUBLE_EQUAL,
     core::token_type::BANG_EQUAL
 };
 
-static const t_binary_operator_set set_and = {
+static const t_operator_set set_and = {
     core::token_type::DOUBLE_AMPERSAND
 };
 
-static const t_binary_operator_set set_or = {
+static const t_operator_set set_or = {
     core::token_type::DOUBLE_PIPE
 };
 
-static const t_binary_operator_set set_assignment = {
+static const t_operator_set set_assignment = {
     core::token_type::EQUAL,
     core::token_type::PLUS_EQUAL,
     core::token_type::MINUS_EQUAL,
@@ -115,7 +127,7 @@ static core::ast::p_expr parse_expression(parse_state& state);
 static core::ast::p_stmt parse_statement(parse_state& state);
 static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state);
 
-static core::ast::p_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
+static core::ast::p_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
     core::ast::p_expr left = lower(state);
 
     while (!state.at_eof() && set.find(state.now().type) != set.end()) {
@@ -133,7 +145,7 @@ static core::ast::p_expr binary_expression_left_associative(parse_state& state, 
     return left;
 }
 
-static core::ast::p_expr binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_binary_operator_set& set) {
+static core::ast::p_expr binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
     core::ast::p_expr left = lower(state);
 
     if (!state.at_eof() && set.find(state.now().type) != set.end()) {
@@ -254,8 +266,27 @@ static core::ast::p_expr parse_expr_call(parse_state& state) {
     return std::make_unique<core::ast::expr_call>(core::lisel(expression->selection, state.now().selection), expression, argument_list);
 }
 
+static core::ast::p_expr parse_expr_unary(parse_state& state) {
+    const core::token& start_token = state.now();
+
+    if (set_unary_pre.find(state.now().type) != set_unary_pre.end()) {
+        const core::token& opr = state.next();
+        core::ast::p_expr operand = parse_expr_unary(state);
+        return std::make_unique<core::ast::expr_unary>(core::lisel(start_token.selection, operand->selection), operand, opr, false);
+    }
+
+    core::ast::p_expr expression = parse_expr_call(state);
+
+    if (set_unary_post.find(state.now().type) != set_unary_post.end()) {
+        const core::token& opr = state.next();
+        return std::make_unique<core::ast::expr_unary>(core::lisel(start_token.selection, opr.selection), expression, opr, true);
+    }
+    
+    return expression;
+}
+
 static core::ast::p_expr parse_exponential(parse_state& state) {
-    return binary_expression_right_associative(state, &parse_expr_call, set_exponential);
+    return binary_expression_right_associative(state, &parse_expr_unary, set_exponential);
 }
 
 static core::ast::p_expr parse_multiplicative(parse_state& state) {

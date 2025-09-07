@@ -39,6 +39,7 @@ namespace core {
             EXPR_INVALID,
             EXPR_IDENTIFIER,
             EXPR_LITERAL,
+            EXPR_UNARY,
             EXPR_BINARY,
             EXPR_TERNARY,
             
@@ -148,21 +149,37 @@ namespace core {
             }
         };
 
-        struct expr_binary : expr {
-            expr_binary(const core::lisel& selection, p_expr&& left, p_expr&& right, const core::token& opr)
-                : expr(selection, node_type::EXPR_BINARY), left(std::move(left)), right(std::move(right)), opr(opr) {}
+        struct expr_unary : expr {
+            expr_unary(const core::lisel& selection, p_expr& operand, const core::token& opr, const bool post)
+                : expr(selection, node_type::EXPR_UNARY), operand(std::move(operand)), opr(opr), post(post) {}
 
-            const p_expr left;
-            const p_expr right;
+            const p_expr operand;
+            const core::token opr;
+            const bool post;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "expr_unary\n";
+                buffer += _indent(indent) + "opr: " + process.sub_source_code(opr.selection) + (post ? " (post)" : " (pre)") + '\n';
+                buffer += _indent(indent) + "operand\n";
+                operand->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+
+        struct expr_binary : expr {
+            expr_binary(const core::lisel& selection, p_expr&& first, p_expr&& second, const core::token& opr)
+                : expr(selection, node_type::EXPR_BINARY), first(std::move(first)), second(std::move(second)), opr(opr) {}
+
+            const p_expr first;
+            const p_expr second;
             const core::token opr;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "expr_binary\n";
                 buffer += _indent(indent) + "opr: " + process.sub_source_code(opr.selection) + '\n';
-                buffer += _indent(indent) + "left\n";
-                left->pretty_debug(process, buffer, indent + 1);
-                buffer += _indent(indent) + "right\n";
-                right->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "first\n";
+                first->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "second\n";
+                second->pretty_debug(process, buffer, indent + 1);
             }
         };
         
