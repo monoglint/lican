@@ -85,6 +85,9 @@ bool HELP(const t_command_data& command) {
     std::cout << "flags\n";
     std::cout << "  Lists all available build flags.\n\n";
 
+    std::cout << "version\n";
+    std::cout << "  Writes the current CLI and compiler version.\n\n";
+
     std::cout << "exit, quit\n";
     std::cout << "  Exits the program.\n\n";
 
@@ -148,7 +151,7 @@ bool FLAGS(const t_command_data& command) {
 }
 
 bool VERSION(const t_command_data& command) {
-    std::cout << "lican v0.0.0-alpha\n";
+    std::cout << "lican v0.1.0-alpha\n";
     std::cout << "licancli v0.1.0-rc\n";
     return true;
 }

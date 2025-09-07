@@ -17,11 +17,11 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"return", core::token_type::RETURN},
     {"break", core::token_type::BREAK},
     {"continue", core::token_type::CONTINUE},
-    {"class", core::token_type::CLASS},
     {"dec", core::token_type::DEC},
     {"true", core::token_type::TRUE},
     {"false", core::token_type::FALSE},
     {"nil", core::token_type::NIL},
+    {"use", core::token_type::USE},
 };
 
 static const std::unordered_map<std::string, core::token_type> double_character_map = {

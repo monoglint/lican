@@ -44,6 +44,8 @@ namespace core {
             
             EXPR_PARAMETER,
             EXPR_FUNCTION,
+            
+            EXPR_CALL,
 
             STMT_NONE,
             STMT_IF,
@@ -52,6 +54,9 @@ namespace core {
             STMT_RETURN,
             STMT_WRAPPER,
             STMT_BODY,
+            STMT_USE,
+            STMT_BREAK,
+            STMT_CONTINUE,
         };
         
         // AST nodes
@@ -80,9 +85,6 @@ namespace core {
 
         using p_stmt = std::unique_ptr<stmt>;
         using p_expr = std::unique_ptr<expr>;
-
-        // Forward declarations
-        struct stmt_body;
 
         struct ast_root : node {
             ast_root()
@@ -137,7 +139,7 @@ namespace core {
             };
 
             expr_literal(const core::lisel& selection, const literal_type type)
-                : expr(selection, node_type::EXPR_IDENTIFIER), type(type) {}
+                : expr(selection, node_type::EXPR_LITERAL), type(type) {}
 
             const literal_type type;
 
@@ -203,22 +205,42 @@ namespace core {
         };
 
         struct expr_function : expr {
-            expr_function(const core::lisel& selection, std::vector<std::unique_ptr<expr_parameter>>& parameter_list, std::unique_ptr<stmt_body>& body)
+            expr_function(const core::lisel& selection, std::vector<std::unique_ptr<expr_parameter>>& parameter_list, p_stmt& body)
                 : expr(selection, node_type::EXPR_FUNCTION), parameter_list(std::move(parameter_list)), body(std::move(body)) {}
 
-            std::vector<std::unique_ptr<expr_parameter>> parameter_list;
-            std::unique_ptr<stmt_body> body;
+            const std::vector<std::unique_ptr<expr_parameter>> parameter_list;
+            const p_stmt body;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
-                buffer += _indent(indent++) += "expr_function\n";
+                buffer += _indent(indent++) + "expr_function\n";
                 buffer += _indent(indent) + "parameter_list:\n";
                 
                 for (auto& param : parameter_list) {
                     param->pretty_debug(process, buffer, indent + 1);
                 }
 
-                buffer += _indent(indent) + "body: [NOT ADDED]\n";
-                // body->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "body:\n";
+                body->pretty_debug(process, buffer, indent + 1);
+            } 
+        };
+
+        struct expr_call : expr {
+            expr_call(const core::lisel& selection, p_expr& callee, std::vector<p_expr>& argument_list)
+                : expr(selection, node_type::EXPR_CALL), callee(std::move(callee)), argument_list(std::move(argument_list)) {}
+
+            const p_expr callee;
+            const std::vector<p_expr> argument_list;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "expr_call\n";
+                buffer += _indent(indent) + "callee:\n";
+                
+                callee->pretty_debug(process, buffer, indent + 1);
+
+                buffer += _indent(indent) + "argument_list:\n";
+                for (auto& param : argument_list) {
+                    param->pretty_debug(process, buffer, indent + 1);
+                }
             } 
         };
         
@@ -314,17 +336,48 @@ namespace core {
 
         struct stmt_body : stmt {
             stmt_body(const core::lisel& selection, std::vector<p_stmt>& statement_list)
-                : stmt(selection, node_type::ROOT), statement_list(std::move(statement_list)) {}
+                : stmt(selection, node_type::STMT_BODY), statement_list(std::move(statement_list)) {}
 
-            std::vector<p_stmt> statement_list;
+            const std::vector<p_stmt> statement_list;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
-                buffer += _indent(indent) + "stmt_body : node\n";
+                buffer += _indent(indent) + "stmt_body\n";
                 buffer += _indent(indent++) + "statements:\n";
 
                 for (const p_stmt& stmt : statement_list) {
                     stmt->pretty_debug(process, buffer, indent);
                 }
+            }
+        };
+
+        struct stmt_use : stmt {
+            stmt_use(const core::lisel& selection, std::unique_ptr<expr_literal>& path)
+                : stmt(selection, node_type::STMT_USE), path(std::move(path)) {};
+
+            // The parser must ensure that this literal is a string.
+            const std::unique_ptr<expr_literal> path;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "stmt_use\n";
+                path->pretty_debug(process, buffer, indent + 1);
+            }
+        };
+
+        struct stmt_break : stmt {
+            stmt_break(const core::lisel& selection)
+                : stmt(selection, node_type::STMT_BREAK) {};
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "stmt_break\n";
+            }
+        };
+
+        struct stmt_continue : stmt {
+            stmt_continue(const core::lisel& selection)
+                : stmt(selection, node_type::STMT_CONTINUE) {};
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "stmt_continue\n";
             }
         };
     }

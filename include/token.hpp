@@ -24,10 +24,11 @@ namespace core {
 
         BREAK,
         CONTINUE,
-        CLASS,
 
         // Variable and function declaration
         DEC,
+        
+        USE,
 
         COLON,
 

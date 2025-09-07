@@ -177,7 +177,6 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
         }
         else
             default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
-            
 
         parameter_list.emplace_back(std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, qualifiers));
     } while (state.now().type == core::token_type::COMMA);
@@ -190,7 +189,7 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
 static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state& state) {
     const core::token& start_token = state.now();
     auto parameter_list = parse_expr_parameter_list(state);
-    std::unique_ptr<core::ast::stmt_body> body = parse_stmt_body(state);
+    core::ast::p_stmt body = parse_statement(state);
 
     return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body); 
 }
@@ -234,8 +233,29 @@ static core::ast::p_expr parse_member_access(parse_state& state) {
     return binary_expression_left_associative(state, &parse_scope_resolution, set_member_access);
 }
 
+static core::ast::p_expr parse_expr_call(parse_state& state) {
+    core::ast::p_expr expression = parse_member_access(state);
+
+    if (state.now().type != core::token_type::LPAREN)
+        return expression;
+
+    std::vector<core::ast::p_expr> argument_list;
+
+    if (state.peek(1).type != core::token_type::RPAREN)
+        do {
+            state.next();
+            argument_list.emplace_back(parse_expression(state));
+        } while (state.now().type == core::token_type::COMMA);
+    else
+        state.next();
+
+    state.expect(core::token_type::RPAREN, "Expected a closing parenthesis after function call.");
+
+    return std::make_unique<core::ast::expr_call>(core::lisel(expression->selection, state.now().selection), expression, argument_list);
+}
+
 static core::ast::p_expr parse_exponential(parse_state& state) {
-    return binary_expression_right_associative(state, &parse_member_access, set_exponential);
+    return binary_expression_right_associative(state, &parse_expr_call, set_exponential);
 }
 
 static core::ast::p_expr parse_multiplicative(parse_state& state) {
@@ -336,14 +356,12 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
     std::vector<core::ast::variable_qualifier> qualifiers = {};
     const core::token& start_token = state.next();
     
-    core::ast::p_expr name = parse_expr_ternary(state); // Do not let assignment binary expressions mess things up
+    core::ast::p_expr name = parse_scope_resolution(state);
     
     if (state.now().type == core::token_type::COLON) {
 
         // Handle type stuff later
     }
-
-    std::cout << std::to_string(static_cast<uint8_t>(state.now().type)) << '\n';
 
     core::ast::p_expr value;
 
@@ -363,10 +381,23 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
 }
 
 static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
-    const core::token& return_token = state.next();
-    core::ast::p_expr expression = parse_expression(state);
+    const core::token& start_token = state.next();
+
+    core::ast::p_expr expression;
+
+    if (state.now().type == core::token_type::RBRACE)
+        expression = std::make_unique<core::ast::expr_none>(state.now().selection);
+    else
+        expression = parse_expression(state);
     
-    return std::make_unique<core::ast::stmt_return>(core::lisel(return_token.selection, expression->selection), expression);
+    return std::make_unique<core::ast::stmt_return>(core::lisel(start_token.selection, expression->selection), expression);
+}
+
+static std::unique_ptr<core::ast::stmt_use> parse_stmt_use(parse_state& state) {
+    const core::token& start_token = state.next();
+    auto string = std::make_unique<core::ast::expr_literal>(state.expect(core::token_type::STRING, "Expected a string.").selection, core::ast::expr_literal::literal_type::STRING);
+
+    return std::make_unique<core::ast::stmt_use>(core::lisel(start_token.selection, string->selection), string);
 }
 
 static core::ast::p_stmt parse_statement(parse_state& state) {
@@ -378,6 +409,9 @@ static core::ast::p_stmt parse_statement(parse_state& state) {
         case core::token_type::LBRACE: return parse_stmt_body(state);
         case core::token_type::DEC: return parse_stmt_declaration(state);   // For variable qualifiers, we'll check for those and fallthrough.
         case core::token_type::RETURN: return parse_stmt_return(state);
+        case core::token_type::USE: return parse_stmt_use(state);
+        case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
+        case core::token_type::CONTINUE: return std::make_unique<core::ast::stmt_continue>(state.next().selection);
         default:     return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
     }
 }
