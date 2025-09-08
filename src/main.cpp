@@ -72,7 +72,7 @@ bool HELP(const t_command_data& command) {
     std::cout << "help\n";
     std::cout << "  Displays this help message.\n\n";
 
-    std::cout << "build <path> <entry> <out> -<flags>\n";
+    std::cout << "build <path> <entry> <out> -<flags>\n"; 
     std::cout << "  Builds the project at <path> with entry point <entry>.\n";
     std::cout << "  <path> directory is based on CD, but <entry>'s path is always based on <path>.\n\n";
 
@@ -151,7 +151,7 @@ bool FLAGS(const t_command_data& command) {
 }
 
 bool VERSION(const t_command_data& command) {
-    std::cout << "lican v0.1.0-alpha\n";
+    std::cout << "lican v0.2.0-alpha\n";
     std::cout << "licancli v0.1.0-rc\n";
     return true;
 }
