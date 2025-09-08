@@ -65,9 +65,34 @@ namespace core {
             const std::string path;
             const std::string source_code;
 
+            std::vector<t_pos> line_marker_list; // Used to get the current line and column.
+
             // Data dump - avoids additional header dependencies. Decast as needed
             std::any dump_token_list;                   // std::vector<token>
             std::any dump_ast_root;                     // std::shared_ptr<ast::ast_root>
+
+            // Both functions below are written by ChatGPT for O(log n). Initial function method written by me in O(n)
+            
+            // 0-indexed
+            inline t_pos get_line_of_position(const t_pos position) const {
+                auto it = std::upper_bound(line_marker_list.begin(), line_marker_list.end(), position);
+                
+                if (it == line_marker_list.begin()) return 0;
+                    return std::distance(line_marker_list.begin(), it);
+            }
+
+            // 0-indexed
+            inline t_pos get_column_of_position(const t_pos position) const {
+                auto it = std::upper_bound(line_marker_list.begin(), line_marker_list.end(), position);
+
+                if (it == line_marker_list.begin())
+                    return position;
+                else {
+                    auto prev_newline = *(it - 1);
+                    return position - prev_newline - 1;
+                }
+            }
+
         };
 
         struct lilog {

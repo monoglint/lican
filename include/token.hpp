@@ -51,14 +51,12 @@ namespace core {
         DOUBLE_COLON,
         DOUBLE_PLUS,
         DOUBLE_MINUS,
-        
+
         EQUAL,
         DOUBLE_EQUAL,
         BANG,
         BANG_EQUAL,
-        LESS,
         LESS_EQUAL,
-        GREATER,
         GREATER_EQUAL,
 
         PLUS_EQUAL,
@@ -72,6 +70,8 @@ namespace core {
         RPAREN,
         LBRACE,
         RBRACE,
+        LARROW,
+        RARROW,
     };
 
     struct token {

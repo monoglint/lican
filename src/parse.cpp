@@ -45,9 +45,9 @@ static const t_operator_set set_additive = {
 };
 
 static const t_operator_set set_numeric_comparison = {
-    core::token_type::LESS,
+    core::token_type::LARROW,
     core::token_type::LESS_EQUAL,
-    core::token_type::GREATER,
+    core::token_type::RARROW,
     core::token_type::GREATER_EQUAL
 };
 
@@ -124,8 +124,19 @@ struct parse_state {
 
 // Forward declarations
 static core::ast::p_expr parse_expression(parse_state& state);
+static core::ast::p_expr parse_scope_resolution(parse_state& state);
 static core::ast::p_stmt parse_statement(parse_state& state);
+static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state);
 static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state);
+
+static core::ast::p_expr PARSE_OPTIONAL_TYPE(parse_state& state) {
+    if (state.now().type == core::token_type::COLON) {
+        state.next();
+        return parse_expr_type(state);
+    }
+
+    return std::make_unique<core::ast::expr_none>(state.now().selection);
+}
 
 static core::ast::p_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
     core::ast::p_expr left = lower(state);
@@ -165,6 +176,42 @@ static core::ast::p_expr binary_expression_right_associative(parse_state& state,
     return left;
 }
 
+static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state) {
+    core::ast::p_expr source = parse_scope_resolution(state);
+    std::vector<std::unique_ptr<core::ast::expr_type>> argument_list = {};
+
+    if (state.now().type == core::token_type::LARROW) {
+        do {
+            state.next();
+            argument_list.emplace_back(parse_expr_type(state));
+        } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
+
+        state.expect(core::token_type::RARROW, "Expected a closing arrow inside parameters list.");
+    }
+
+    return std::make_unique<core::ast::expr_type>(core::lisel(source->selection, state.now().selection), source, argument_list);
+}
+
+static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_state& state) {
+    const core::token& start_token = state.now();
+    
+    std::vector<core::ast::parameter_qualifier> qualifiers = {};
+    auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
+
+    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
+    
+    core::ast::p_expr default_value;
+
+    if (state.now().type == core::token_type::EQUAL) {
+        state.next();
+        default_value = parse_expression(state);
+    }
+    else
+        default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
+
+    return std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, qualifiers, type);
+}
+
 static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
     std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list;
     
@@ -173,25 +220,8 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
     
     do {
         state.next();
-        
-        const core::token& start_token = state.now();
-        
-        std::vector<core::ast::parameter_qualifier> qualifiers = {};
-        auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
-
-        // Get type later
-        
-        core::ast::p_expr default_value;
-
-        if (state.now().type == core::token_type::EQUAL) {
-            state.next();
-            default_value = parse_expression(state);
-        }
-        else
-            default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
-
-        parameter_list.emplace_back(std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, qualifiers));
-    } while (state.now().type == core::token_type::COMMA);
+        parameter_list.emplace_back(parse_expr_parameter(state));
+    } while (!state.at_eof(), state.now().type == core::token_type::COMMA);
     
     state.expect(core::token_type::RPAREN, "Expected a closing parenthesis inside parameters list.");
     
@@ -200,10 +230,12 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
 
 static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state& state) {
     const core::token& start_token = state.now();
-    auto parameter_list = parse_expr_parameter_list(state);
+    std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list = parse_expr_parameter_list(state);
+    core::ast::p_expr return_type = PARSE_OPTIONAL_TYPE(state);
+
     core::ast::p_stmt body = parse_statement(state);
 
-    return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body); 
+    return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body, return_type); 
 }
 
 static core::ast::p_expr parse_primary_expression(parse_state& state) {
@@ -232,7 +264,7 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
             break;
     }
 
-    state.process.add_log(core::liprocess::lilog::log_level::ERROR, tok.selection, "Unexpected token.");
+    state.process.add_log(core::liprocess::lilog::log_level::ERROR, tok.selection, "Unexpected token: " + state.process.sub_source_code(tok.selection));
 
     return std::make_unique<core::ast::expr_invalid>(tok.selection);
 }
@@ -257,7 +289,7 @@ static core::ast::p_expr parse_expr_call(parse_state& state) {
         do {
             state.next();
             argument_list.emplace_back(parse_expression(state));
-        } while (state.now().type == core::token_type::COMMA);
+        } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
     else
         state.next();
 
@@ -389,10 +421,7 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
     
     core::ast::p_expr name = parse_scope_resolution(state);
     
-    if (state.now().type == core::token_type::COLON) {
-
-        // Handle type stuff later
-    }
+    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
 
     core::ast::p_expr value;
 
@@ -408,7 +437,7 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
             value = std::make_unique<core::ast::expr_none>(state.now().selection);
     }
     
-    return std::make_unique<core::ast::stmt_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, qualifiers);
+    return std::make_unique<core::ast::stmt_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, qualifiers, type);
 }
 
 static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
@@ -443,7 +472,15 @@ static core::ast::p_stmt parse_statement(parse_state& state) {
         case core::token_type::USE: return parse_stmt_use(state);
         case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
         case core::token_type::CONTINUE: return std::make_unique<core::ast::stmt_continue>(state.next().selection);
-        default:     return std::make_unique<core::ast::stmt_wrapper>(parse_expression(state));
+        default: {
+            core::ast::p_expr expression = parse_expression(state);
+            if (!expression->is_wrappable()) {
+                state.process.add_log(core::liprocess::lilog::log_level::ERROR, expression->selection, "The given expression is not wrappable: " + state.process.sub_source_code(expression->selection));
+                return std::make_unique<core::ast::stmt_invalid>(expression->selection);
+            }
+            
+            return std::make_unique<core::ast::stmt_wrapper>(expression);
+        }
     }
 }
 

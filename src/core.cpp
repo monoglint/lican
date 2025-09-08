@@ -13,5 +13,9 @@ std::string core::liprocess::lilog::pretty_debug(const liprocess& process) const
 }
 
 std::string core::lisel::pretty_debug(const liprocess& process) const {
-    return std::string("[Char ") + std::to_string(start) + ']';
+    const core::liprocess::lifile& file = process.file_list[file_id];
+    const core::t_pos line = file.get_line_of_position(start) + 1;
+    const core::t_pos column = file.get_column_of_position(start) + 1;
+
+    return std::string("[Line ") + std::to_string(line) + ", Col " + std::to_string(column) + ']';
 }

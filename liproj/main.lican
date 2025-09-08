@@ -1,1 +1,3 @@
-var x = "Hello world"
+dec gayify(hetero: person): homosexual {
+    return lib::gayify(hetero)
+}

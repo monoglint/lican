@@ -37,6 +37,7 @@ namespace core {
 
             EXPR_NONE,
             EXPR_INVALID,
+            EXPR_TYPE,
             EXPR_IDENTIFIER,
             EXPR_LITERAL,
             EXPR_UNARY,
@@ -49,6 +50,7 @@ namespace core {
             EXPR_CALL,
 
             STMT_NONE,
+            STMT_INVALID,
             STMT_IF,
             STMT_WHILE,
             STMT_DECLARATION,
@@ -82,6 +84,10 @@ namespace core {
         struct expr : node {
             expr(const core::lisel& selection, const node_type type)
                 : node(selection, type) {}
+
+            inline virtual bool is_wrappable() const {
+                return false;
+            }
         };
 
         using p_stmt = std::unique_ptr<stmt>;
@@ -118,6 +124,24 @@ namespace core {
             
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "expr_invalid\n";
+            }
+        };
+
+        struct expr_type : expr {
+            expr_type(const core::lisel& selection, p_expr& source, std::vector<std::unique_ptr<expr_type>>& argument_list)
+                : expr(selection, node_type::EXPR_TYPE), source(std::move(source)), argument_list(std::move(argument_list)) {}
+            
+            const p_expr source;
+            const std::vector<std::unique_ptr<expr_type>> argument_list;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "expr_type\n";
+                buffer += _indent(indent) + "source:\n";
+                source->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "arguments:\n";
+                for (const auto& arg : argument_list) {
+                    arg->pretty_debug(process, buffer, indent + 1);
+                }
             }
         };
 
@@ -203,13 +227,13 @@ namespace core {
         };
         
         struct expr_parameter : expr {
-            expr_parameter(const core::lisel& selection, std::unique_ptr<expr_identifier>& name, p_expr& default_value, std::vector<parameter_qualifier>& qualifiers)
-                : expr(selection, node_type::EXPR_PARAMETER), name(std::move(name)), default_value(std::move(default_value)), qualifiers(std::move(qualifiers)) {}
+            expr_parameter(const core::lisel& selection, std::unique_ptr<expr_identifier>& name, p_expr& default_value, std::vector<parameter_qualifier>& qualifiers, p_expr& type)
+                : expr(selection, node_type::EXPR_PARAMETER), name(std::move(name)), default_value(std::move(default_value)), qualifiers(std::move(qualifiers)), type(std::move(type)) {}
 
             const std::unique_ptr<expr_identifier> name;
             const p_expr default_value;
             const std::vector<parameter_qualifier> qualifiers;
-            // Include types later
+            const p_expr type;
             
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "expr_parameter\n";
@@ -218,15 +242,18 @@ namespace core {
                 buffer += _indent(indent) + "default_value:\n";
                 default_value->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "qualifiers: [NOT ADDED]\n";
+                buffer += _indent(indent) + "type:\n";
+                type->pretty_debug(process, buffer, indent + 1);
             }
         };
 
         struct expr_function : expr {
-            expr_function(const core::lisel& selection, std::vector<std::unique_ptr<expr_parameter>>& parameter_list, p_stmt& body)
-                : expr(selection, node_type::EXPR_FUNCTION), parameter_list(std::move(parameter_list)), body(std::move(body)) {}
+            expr_function(const core::lisel& selection, std::vector<std::unique_ptr<expr_parameter>>& parameter_list, p_stmt& body, p_expr& return_type)
+                : expr(selection, node_type::EXPR_FUNCTION), parameter_list(std::move(parameter_list)), body(std::move(body)), return_type(std::move(return_type)) {}
 
             const std::vector<std::unique_ptr<expr_parameter>> parameter_list;
             const p_stmt body;
+            const p_expr return_type;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "expr_function\n";
@@ -235,6 +262,9 @@ namespace core {
                 for (auto& param : parameter_list) {
                     param->pretty_debug(process, buffer, indent + 1);
                 }
+
+                buffer += _indent(indent) + "return_type:\n";
+                return_type->pretty_debug(process, buffer, indent + 1);
 
                 buffer += _indent(indent) + "body:\n";
                 body->pretty_debug(process, buffer, indent + 1);
@@ -258,7 +288,11 @@ namespace core {
                 for (auto& param : argument_list) {
                     param->pretty_debug(process, buffer, indent + 1);
                 }
-            } 
+            }
+            
+            inline bool is_wrappable() const override {
+                return true;
+            }
         };
         
         struct stmt_none : stmt {
@@ -267,6 +301,15 @@ namespace core {
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "NONE\n"; 
+            }
+        };
+
+        struct stmt_invalid : stmt {
+            stmt_invalid(const core::lisel& selection)
+                : stmt(selection, node_type::STMT_INVALID) {}
+            
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent) + "stmt_invalid\n";
             }
         };
 
@@ -309,17 +352,20 @@ namespace core {
         };
         
         struct stmt_declaration : stmt {
-            stmt_declaration(const core::lisel& selection, p_expr& name, p_expr& value, std::vector<variable_qualifier>& qualifiers)
-                : stmt(selection, node_type::STMT_DECLARATION), name(std::move(name)), value(std::move(value)), qualifiers(std::move(qualifiers)) {}
+            stmt_declaration(const core::lisel& selection, p_expr& name, p_expr& value, std::vector<variable_qualifier>& qualifiers, p_expr& type)
+                : stmt(selection, node_type::STMT_DECLARATION), name(std::move(name)), value(std::move(value)), qualifiers(std::move(qualifiers)), type(std::move(type)) {}
             
             const p_expr name; // Use p_expr instead of expr_identifier since variables can be declared within scopes.
             const p_expr value;
             const std::vector<variable_qualifier> qualifiers;
+            const p_expr type;
             
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "stmt_declaration\n";
                 buffer += _indent(indent) + "name:\n";
                 name->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "type:\n";
+                type->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "value:\n";
                 value->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "qualifiers: [NOT ADDED]\n";
@@ -340,7 +386,7 @@ namespace core {
         };
 
         struct stmt_wrapper : stmt {
-            stmt_wrapper(p_expr&& expression)
+            stmt_wrapper(p_expr& expression)
                 : stmt(expression->selection, node_type::STMT_WRAPPER), expression(std::move(expression)) {}
 
             const p_expr expression;

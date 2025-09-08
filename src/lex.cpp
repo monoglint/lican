@@ -56,13 +56,13 @@ static const std::unordered_map<char, core::token_type> character_map = {
     {'.', core::token_type::DOT},
     {'=', core::token_type::EQUAL},
     {'!', core::token_type::BANG},
-    {'<', core::token_type::LESS},
-    {'>', core::token_type::GREATER},
     {'(', core::token_type::LPAREN},
     {')', core::token_type::RPAREN},
     {'{', core::token_type::LBRACE},
     {'}', core::token_type::RBRACE},
     {',', core::token_type::COMMA},
+    {'<', core::token_type::LARROW},
+    {'>', core::token_type::RARROW},
 };
 
 struct lex_state {
@@ -79,6 +79,9 @@ struct lex_state {
     }
 
     inline char next() {
+        if (now() == '\n') 
+            file.line_marker_list.emplace_back(pos);
+
         return file.source_code[pos++];
     }
 
