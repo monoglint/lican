@@ -72,9 +72,9 @@ bool HELP(const t_command_data& command) {
     std::cout << "help\n";
     std::cout << "  Displays this help message.\n\n";
 
-    std::cout << "build <path> <entry> <out> -<flags>\n"; 
+    std::cout << "build <entry_path> <out> -<flags>\n"; 
     std::cout << "  Builds the project at <path> with entry point <entry>.\n";
-    std::cout << "  <path> directory is based on CD, but <entry>'s path is always based on <path>.\n\n";
+    std::cout << "  Assume all arguments are relative to cd.\n\n";
 
     std::cout << "write\n";
     std::cout << "  Compiles the given code snippet. Flags are implicitly set for debug mode.\n\n";
@@ -95,27 +95,23 @@ bool HELP(const t_command_data& command) {
 }
 
 bool BUILD(const t_command_data& command) {
-    if (command.size() < 4)
+    if (command.size() < 3)
         return false;
 
-    if (!std::filesystem::is_directory(command[1])) {
-        std::cout << "The project path is not an existing directory.\n";
-        return false;
-    }
-    if (!std::filesystem::exists(std::string(command[1]) + '/' + std::string(command[2]))) {
+    if (!std::filesystem::exists(std::string(command[1]))) {
         std::cout << "The given entry point file name does not exist within the project directory.\n";
         return false;
     }
-    if (!std::filesystem::is_directory(command[3])) {
+    if (!std::filesystem::is_directory(command[2])) {
         std::cout << "The output path is not an existing directory.\n";
         return false;
     }
 
     licanapi::liconfig_init config;
-    config.project_path = command[1];
-    config.entry_point_subpath = command[2];
-    config.output_path = command[3];
-    config.flag_list = command.size() > 4 ? std::vector<std::string>(command.begin() + 4, command.end()) : std::vector<std::string>();
+    config.project_path = ""; // cd
+    config.entry_point_subpath = command[1];
+    config.output_path = command[2];
+    config.flag_list = command.size() > 3 ? std::vector<std::string>(command.begin() + 3, command.end()) : std::vector<std::string>();
 
     licanapi::build_project(config);
 
@@ -152,7 +148,7 @@ bool FLAGS(const t_command_data& command) {
 
 bool VERSION(const t_command_data& command) {
     std::cout << "lican v0.2.0-alpha\n";
-    std::cout << "licancli v0.1.0-rc\n";
+    std::cout << "licancli v0.2.0-rc\n";
     return true;
 }
 
@@ -176,20 +172,24 @@ bool process_command(const t_command_data& command) {
 }
 
 int main(int argc, char* argv[]) {
-    std::cout.setf(std::ios::unitbuf);
-
     if (argc > 1) {
         // Inverse bool so true means a successful exit code.
         const t_command_data command = parse_c_style_command(argc, argv);
-        if (!process_command(command)) {
+        bool process_success = process_command(command);
+        
+        std::cout << std::endl;
+        
+        if (!process_success) {
             std::cout << "Error processing command: " << command[0] << '\n';
             return 1;
         }
 
-        std::cout << "finished\n";
         return 0;
     }
 
+    HELP({});
+
+    /*
     std::cout << "Lican was invoked without arguments. Entering interactive mode.\n";
     std::cout << "Welcome to lican. Prompt 'help' for a list of commands.\n";
     while (true) {
@@ -206,7 +206,6 @@ int main(int argc, char* argv[]) {
         if (!process_command(command))
             std::cout << "Error processing command: " << command[0] << '\n';
     }
-
-    std::cout << "finished\n";
+    */
     return 0;
 }

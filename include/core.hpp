@@ -57,6 +57,23 @@ namespace core {
         std::string pretty_debug(const liprocess& process) const;
     };
 
+    struct lilog {
+        enum class log_level : uint8_t {
+            LOG,
+            WARNING,
+            ERROR
+        };
+
+        lilog(const log_level level, const lisel& selection, const std::string& message)
+            : level(level), selection(selection), message(message) {}
+
+        const log_level level;
+        const lisel selection;
+        const std::string message;
+
+        std::string pretty_debug(const liprocess& process) const;
+    };
+
     struct liprocess {
         struct lifile {
             lifile(const std::string& path, const std::string& source_code)
@@ -93,23 +110,6 @@ namespace core {
                 }
             }
 
-        };
-
-        struct lilog {
-            enum class log_level : uint8_t {
-                LOG,
-                WARNING,
-                ERROR
-            };
-
-            lilog(const log_level level, const lisel& selection, const std::string& message)
-                : level(level), selection(selection), message(message) {}
-
-            const log_level level;
-            const lisel selection;
-            const std::string message;
-
-            std::string pretty_debug(const liprocess& process) const;
         };
 
         liprocess(const licanapi::liconfig_init& config_init)

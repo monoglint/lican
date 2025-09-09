@@ -15,7 +15,7 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_CXX_COMPILER": "C:\\msys64\\mingw64\\bin\\g++.exe",
                 "CMAKE_C_COMPILER": "C:\\msys64\\mingw64\\bin\\gcc.exe",
-                "CMAKE_CXX_FLAGS_RELEASE": "-O3 -flto -fno-exceptions -fno-rtti -fstrict-aliasing -fprefetch-loop-arrays -ffast-math -funroll-loops -fomit-frame-pointer -march=native -DNDEBUG -static-libgcc -static-libstdc++",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O3 -static-libgcc -static-libstdc++",
                 "CMAKE_EXE_LINKER_FLAGS": "-static -static-libgcc -static-libstdc++"
             }
         },

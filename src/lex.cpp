@@ -121,6 +121,30 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
             continue;
         }
 
+        if (current_char == '#') {
+            state.next();
+            if (state.now() == '*') {
+                state.next();
+                while (!state.at_eof() && !(state.now() == '*' && state.peek(1) == '#'))
+                    state.next();
+
+                if (state.at_eof())
+                    process.add_log(lilog::log_level::ERROR, state.get_selection(), "Unending multiline comment.");
+                else {
+                    state.next(); // skip '*'
+                    state.next(); // skip '#'
+                }
+            }
+            else {
+                // Single-line comment: skip until end of line or file
+                while (!state.at_eof() && state.now() != '\n')
+                    state.next();
+                if (!state.at_eof())
+                    state.next(); // skip the newline character
+            }
+            continue;
+        }
+
         // Strings
         if (current_char == '"') {
             core::t_pos start_pos = state.pos;
@@ -132,7 +156,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			}
 
 			if (state.at_eof()) {
-                process.add_log(liprocess::lilog::log_level::ERROR, state.get_selection(), "Unterminated string literal.");
+                process.add_log(lilog::log_level::ERROR, state.get_selection(), "Unterminated string literal.");
 
 				break;
 			}
@@ -159,7 +183,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 
                 if (state.now() == '.') {
                     if (used_dot)
-                        process.add_log(liprocess::lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can only have one decimal.");
+                        process.add_log(lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can only have one decimal.");
 
                     used_dot = true;
                     state.next();
@@ -170,7 +194,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			}
 
             if (state.peek(-1) == '.')
-                process.add_log(liprocess::lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can't end with a deciaml point.");
+                process.add_log(lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can't end with a deciaml point.");
 
             token_list.emplace_back(token_type::NUMBER, lisel(state.file_id, start_pos, state.pos - 1));
 
@@ -215,7 +239,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			continue;
 		}
 
-        process.add_log(core::liprocess::lilog::log_level::ERROR, state.get_selection(), "Invalid token.");
+        process.add_log(core::lilog::log_level::ERROR, state.get_selection(), "Invalid token.");
 
         token_list.emplace_back(token_type::INVALID, state.get_selection());
 

@@ -31,7 +31,7 @@ namespace licanapi {
     struct liconfig {
         liconfig(const liconfig_init init) : 
             project_path(init.project_path), 
-            entry_point_path(init.project_path + '/' + init.entry_point_subpath),
+            entry_point_path(init.project_path + (init.project_path.length() > 0 ? "/" : "") + init.entry_point_subpath),
             output_path(init.output_path),
             _dump_token_list(contains_flag(init.flag_list, "-t")),
             _dump_ast(contains_flag(init.flag_list, "-a")),

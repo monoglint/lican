@@ -1,3 +1,8 @@
-dec gayify(hetero: person): homosexual {
-    return lib::gayify(hetero)
-}
+#* typedec num = safe_any<u8, u16, u32, u64, i8, i16, i32, i64, f32, f64>
+
+*#
+
+# test comment
+
+dec add(a: num, b: num): num
+    return a + b

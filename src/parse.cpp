@@ -116,7 +116,7 @@ struct parse_state {
     inline const core::token& expect(const core::token_type type, const std::string& error_message = "[No Info]") {
         const core::token& now = next();
         if (now.type != type)
-            process.add_log(core::liprocess::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
+            process.add_log(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
         
         return now;
     }
@@ -264,7 +264,7 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
             break;
     }
 
-    state.process.add_log(core::liprocess::lilog::log_level::ERROR, tok.selection, "Unexpected token: " + state.process.sub_source_code(tok.selection));
+    state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "Unexpected token.");
 
     return std::make_unique<core::ast::expr_invalid>(tok.selection);
 }
@@ -408,7 +408,7 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     }
 
     if (state.at_eof())
-        state.process.add_log(core::liprocess::lilog::log_level::ERROR, state.now().selection, "Expected right brace, got EOF.");
+        state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Expected right brace, got EOF.");
     else
         state.next();
         
@@ -420,7 +420,6 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
     const core::token& start_token = state.next();
     
     core::ast::p_expr name = parse_scope_resolution(state);
-    
     core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
 
     core::ast::p_expr value;
@@ -474,8 +473,9 @@ static core::ast::p_stmt parse_statement(parse_state& state) {
         case core::token_type::CONTINUE: return std::make_unique<core::ast::stmt_continue>(state.next().selection);
         default: {
             core::ast::p_expr expression = parse_expression(state);
+            
             if (!expression->is_wrappable()) {
-                state.process.add_log(core::liprocess::lilog::log_level::ERROR, expression->selection, "The given expression is not wrappable: " + state.process.sub_source_code(expression->selection));
+                state.process.add_log(core::lilog::log_level::ERROR, expression->selection, "Unexpected expression.");
                 return std::make_unique<core::ast::stmt_invalid>(expression->selection);
             }
             

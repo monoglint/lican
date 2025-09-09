@@ -7,7 +7,7 @@
 #include "token.hpp"
 #include "ast.hpp"
 
-const std::string TEMP_FOLDER_LOCATION = "TEMP_LICAN";
+const std::string TEMP_FOLDER_LOCATION = "LICANWRITE0";
 
 std::pair<bool, std::chrono::milliseconds> measure_func(bool (*func)(core::liprocess&, const core::t_file_id), core::liprocess& process) {
     std::chrono::time_point start = std::chrono::high_resolution_clock::now();
@@ -86,8 +86,10 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
         }
     }
 
-    if (!run_success)
+    if (!run_success) {
+        std::cout << "All debug info skipped. One or more processes resulted in termination of the compiler.\n";
         return false;
+    }
 
     for (auto& file : process.file_list) {
         if (process.config._dump_token_list && file.dump_token_list.has_value()) {
@@ -113,11 +115,6 @@ bool licanapi::build_code(const std::string& code, const std::vector<std::string
     std::filesystem::create_directory(TEMP_FOLDER_LOCATION);
 
     create_temp_file("main.lican", code);
-
-    // Test directories
-
-    create_temp_file("math.lican", "m1\nm2\nworld #string world");
-    create_temp_file("string.lican", "s1\ns2");
 
     licanapi::liconfig_init config;
     config.project_path = TEMP_FOLDER_LOCATION;
