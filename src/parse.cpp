@@ -76,14 +76,14 @@ static const t_operator_set set_assignment = {
 
 struct parse_state {
     parse_state(core::liprocess& process, const core::t_file_id file_id)
-        : process(process), file_id(file_id), file(process.file_list[file_id]), token_list(std::any_cast<std::vector<core::token>&>(process.file_list[file_id].dump_token_list)) {}
+        : process(process), file_id(file_id), file(process.file_list[file_id]), token_list(std::any_cast<const std::vector<core::token>&>(process.file_list[file_id].dump_token_list)) {}
 
     core::liprocess& process;
 
-    core::t_file_id file_id;
+    const core::t_file_id file_id;
     core::liprocess::lifile& file;
 
-    std::vector<core::token>& token_list; // Ref to process property
+    const std::vector<core::token>& token_list; // Ref to process property
 
     core::t_pos pos = 0;
 
@@ -293,7 +293,7 @@ static core::ast::p_expr parse_expr_call(parse_state& state) {
     else
         state.next();
 
-    state.expect(core::token_type::RPAREN, "Expected a closing parenthesis after function call.");
+    state.expect(core::token_type::RPAREN, "Expected ')' after function call.");
 
     return std::make_unique<core::ast::expr_call>(core::lisel(expression->selection, state.now().selection), expression, argument_list);
 }

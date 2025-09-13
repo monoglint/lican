@@ -146,9 +146,10 @@ namespace core {
         bool init(liprocess& process);
         bool lex(liprocess& process, const t_file_id file_id);
         bool parse(liprocess& process, const t_file_id file_id);
+        bool semantic_analyze(liprocess& process, const t_file_id file_id);
     }
 
     namespace backend {
-
+        
     }
 }

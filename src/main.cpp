@@ -2,6 +2,7 @@
 #include <string>
 #include <filesystem>
 #include <chrono>
+#include <cstdlib>
 
 #include "licanapi.hpp"
 #include "core.hpp"
@@ -189,9 +190,6 @@ int main(int argc, char* argv[]) {
 
     HELP({});
 
-    /*
-    std::cout << "Lican was invoked without arguments. Entering interactive mode.\n";
-    std::cout << "Welcome to lican. Prompt 'help' for a list of commands.\n";
     while (true) {
         std::cout << "$l > ";
 
@@ -203,9 +201,14 @@ int main(int argc, char* argv[]) {
         if (command[0] == "exit" || command[0] == "quit")
             break;
 
+        if (command[0] == "cls" || command[0] == "clear") {
+            system(command[0].c_str());
+            continue;
+        }
+
         if (!process_command(command))
             std::cout << "Error processing command: " << command[0] << '\n';
     }
-    */
+    
     return 0;
 }

@@ -13,6 +13,8 @@ add_executable(lican
     src/parse.cpp
     src/licanapi.cpp
     src/core.cpp
+    src/semantic.cpp
+    src/generate.cpp
     resources/resources.rc
 )
 
