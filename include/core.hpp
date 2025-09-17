@@ -15,14 +15,19 @@
 
 namespace core {
     using t_file_id = int16_t;
-    using t_pos = uint32_t;
+
+    // Honestly just for some reading clarification. I don't want to use size_t where ever I go.
+    using t_pos = size_t;
+
+    constexpr t_file_id MAX_FILES = UINT16_MAX;
+    constexpr t_pos MAX_POS = UINT32_MAX;
 
     struct liprocess;
 
     // Displays information AS IS. Do not pivot to display to the user. All pivoting is handled implicitly.
     struct lisel {
         lisel(const t_file_id file_id, const t_pos start, const t_pos end)
-            : file_id(file_id), start(start), end(end) {}
+             : file_id(file_id), start(start), end(end) {}
 
         lisel(const t_file_id file_id,const t_pos position)
             : file_id(file_id), start(position), end(position) {}
@@ -121,6 +126,9 @@ namespace core {
         std::vector<lifile> file_list;
 
         inline bool add_file(const std::string& path) {
+            if (file_list.size() > MAX_FILES)
+                return false; // EVIL(ER)
+
             std::ifstream file(path);
 
             if (!file.is_open())

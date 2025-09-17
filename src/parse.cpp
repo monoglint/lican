@@ -131,7 +131,7 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
 
 static core::ast::p_expr PARSE_OPTIONAL_TYPE(parse_state& state) {
     if (state.now().type == core::token_type::COLON) {
-        state.next();
+        state.pos++;
         return parse_expr_type(state);
     }
 
@@ -182,7 +182,7 @@ static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state)
 
     if (state.now().type == core::token_type::LARROW) {
         do {
-            state.next();
+            state.pos++;
             argument_list.emplace_back(parse_expr_type(state));
         } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
 
@@ -203,7 +203,7 @@ static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_sta
     core::ast::p_expr default_value;
 
     if (state.now().type == core::token_type::EQUAL) {
-        state.next();
+        state.pos++;
         default_value = parse_expression(state);
     }
     else
@@ -215,11 +215,13 @@ static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_sta
 static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
     std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list;
     
-    if (state.peek(1).type == core::token_type::RPAREN)
+    if (state.peek(1).type == core::token_type::RPAREN) {
+        state.pos += 2;
         return parameter_list;
+    }
     
     do {
-        state.next();
+        state.pos++;
         parameter_list.emplace_back(parse_expr_parameter(state));
     } while (!state.at_eof(), state.now().type == core::token_type::COMMA);
     
@@ -287,11 +289,11 @@ static core::ast::p_expr parse_expr_call(parse_state& state) {
 
     if (state.peek(1).type != core::token_type::RPAREN)
         do {
-            state.next();
+            state.pos++;
             argument_list.emplace_back(parse_expression(state));
         } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
     else
-        state.next();
+        state.pos++;
 
     state.expect(core::token_type::RPAREN, "Expected ')' after function call.");
 
@@ -373,7 +375,7 @@ static std::unique_ptr<core::ast::stmt_if> parse_stmt_if(parse_state& state) {
     core::ast::p_stmt alternate;
 
     if (state.now().type == core::token_type::ELSE) {
-        state.next(); // Skip else
+        state.pos++; // Skip else
         alternate = parse_statement(state);
     }
     else
@@ -390,7 +392,7 @@ static std::unique_ptr<core::ast::stmt_while> parse_stmt_while(parse_state& stat
 
     // In while loops, else's run if the condition fails on the first time.
     if (state.now().type == core::token_type::ELSE) {
-        state.next(); // Skip else
+        state.pos++; // Skip else
         alternate = parse_statement(state);
     }
     else
@@ -410,7 +412,7 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     if (state.at_eof())
         state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Expected right brace, got EOF.");
     else
-        state.next();
+        state.pos++;
         
     return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.now().selection), statement_list);
 }
@@ -429,7 +431,7 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
             value = parse_expr_function(state);
             break;
         case core::token_type::EQUAL:
-            state.next();
+            state.pos++;
             value = parse_expression(state);
             break;
         default:

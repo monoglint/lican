@@ -404,7 +404,7 @@ namespace core {
             const std::vector<p_stmt> statement_list;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
-                buffer += _indent(indent) + "stmt_body\n";
+                buffer += _indent(indent++) + "stmt_body\n";
                 buffer += _indent(indent++) + "statements:\n";
 
                 for (const p_stmt& stmt : statement_list) {
