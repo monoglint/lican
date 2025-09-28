@@ -22,6 +22,8 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"false", core::token_type::FALSE},
     {"nil", core::token_type::NIL},
     {"use", core::token_type::USE},
+    {"struct", core::token_type::STRUCT},
+    {"component", core::token_type::COMPONENT},
 };
 
 static const std::unordered_map<std::string, core::token_type> double_character_map = {
@@ -63,6 +65,8 @@ static const std::unordered_map<char, core::token_type> character_map = {
     {',', core::token_type::COMMA},
     {'<', core::token_type::LARROW},
     {'>', core::token_type::RARROW},
+    {'@', core::token_type::AT},
+    {'#', core::token_type::POUND},
 };
 
 struct lex_state {
@@ -121,11 +125,11 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
             continue;
         }
 
-        if (current_char == '#') {
+        if (current_char == ';') {
             state.next();
             if (state.now() == '*') {
                 state.next();
-                while (!state.at_eof() && !(state.now() == '*' && state.peek(1) == '#'))
+                while (!state.at_eof() && !(state.now() == '*' && state.peek(1) == ';'))
                     state.next();
 
                 if (state.at_eof())

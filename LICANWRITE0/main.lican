@@ -1,1 +1,1 @@
-dec f() return 5
+dec x: @int = 5

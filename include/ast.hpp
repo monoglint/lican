@@ -23,15 +23,6 @@ inline std::string _indent(const uint8_t level) {
 
 namespace core {
     namespace ast {
-        enum class variable_qualifier : uint8_t {
-            CONST,
-            STATIC,
-        };
-        
-        enum class parameter_qualifier : uint8_t {
-            CONST,
-        };
-        
         enum class node_type : uint8_t {
             ROOT,
 
@@ -46,20 +37,23 @@ namespace core {
             
             EXPR_PARAMETER,
             EXPR_FUNCTION,
+            EXPR_CLOSURE,
             
+            EXPR_DECLARATION,
+
             EXPR_CALL,
 
             STMT_NONE,
             STMT_INVALID,
             STMT_IF,
             STMT_WHILE,
-            STMT_DECLARATION,
             STMT_RETURN,
             STMT_WRAPPER,
             STMT_BODY,
             STMT_USE,
             STMT_BREAK,
             STMT_CONTINUE,
+            STMT_DECLARATION_WRAPPER,
         };
         
         // AST nodes
@@ -128,16 +122,23 @@ namespace core {
         };
 
         struct expr_type : expr {
-            expr_type(const core::lisel& selection, p_expr& source, std::vector<std::unique_ptr<expr_type>>& argument_list)
-                : expr(selection, node_type::EXPR_TYPE), source(std::move(source)), argument_list(std::move(argument_list)) {}
+            expr_type(const core::lisel& selection, p_expr& source, std::vector<std::unique_ptr<expr_type>>& argument_list, const bool is_mutable, const bool is_reference)
+                : expr(selection, node_type::EXPR_TYPE), source(std::move(source)), argument_list(std::move(argument_list)), is_mutable(is_mutable), is_reference(is_reference) {}
             
             const p_expr source;
             const std::vector<std::unique_ptr<expr_type>> argument_list;
+            
+            const bool is_mutable;
+            const bool is_reference;
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent++) + "expr_type\n";
                 buffer += _indent(indent) + "source:\n";
                 source->pretty_debug(process, buffer, indent + 1);
+
+                buffer += _indent(indent) + "is_mutable: " + (is_mutable ? "true" : "false") + '\n';
+                buffer += _indent(indent) + "is_reference: " + (is_reference ? "true" : "false") + '\n';
+
                 buffer += _indent(indent) + "arguments:\n";
                 for (const auto& arg : argument_list) {
                     arg->pretty_debug(process, buffer, indent + 1);
@@ -227,12 +228,11 @@ namespace core {
         };
         
         struct expr_parameter : expr {
-            expr_parameter(const core::lisel& selection, std::unique_ptr<expr_identifier>& name, p_expr& default_value, std::vector<parameter_qualifier>& qualifiers, p_expr& type)
-                : expr(selection, node_type::EXPR_PARAMETER), name(std::move(name)), default_value(std::move(default_value)), qualifiers(std::move(qualifiers)), type(std::move(type)) {}
+            expr_parameter(const core::lisel& selection, std::unique_ptr<expr_identifier>& name, p_expr& default_value, p_expr& type)
+                : expr(selection, node_type::EXPR_PARAMETER), name(std::move(name)), default_value(std::move(default_value)), type(std::move(type)) {}
 
             const std::unique_ptr<expr_identifier> name;
             const p_expr default_value;
-            const std::vector<parameter_qualifier> qualifiers;
             const p_expr type;
             
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
@@ -241,7 +241,6 @@ namespace core {
                 name->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "default_value:\n";
                 default_value->pretty_debug(process, buffer, indent + 1);
-                buffer += _indent(indent) + "qualifiers: [NOT ADDED]\n";
                 buffer += _indent(indent) + "type:\n";
                 type->pretty_debug(process, buffer, indent + 1);
             }
@@ -292,6 +291,25 @@ namespace core {
             
             inline bool is_wrappable() const override {
                 return true;
+            }
+        };
+
+        struct expr_declaration : expr {
+            expr_declaration(const core::lisel& selection, p_expr& name, p_expr& value, p_expr& type)
+                : expr(selection, node_type::EXPR_DECLARATION), name(std::move(name)), value(std::move(value)), type(std::move(type)) {}
+            
+            const p_expr name; // Use p_expr instead of expr_identifier since variables can be declared within scopes.
+            const p_expr value;
+            const p_expr type;
+            
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "expr_declaration\n";
+                buffer += _indent(indent) + "name:\n";
+                name->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "type:\n";
+                type->pretty_debug(process, buffer, indent + 1);
+                buffer += _indent(indent) + "value:\n";
+                value->pretty_debug(process, buffer, indent + 1);
             }
         };
         
@@ -351,27 +369,6 @@ namespace core {
             }
         };
         
-        struct stmt_declaration : stmt {
-            stmt_declaration(const core::lisel& selection, p_expr& name, p_expr& value, std::vector<variable_qualifier>& qualifiers, p_expr& type)
-                : stmt(selection, node_type::STMT_DECLARATION), name(std::move(name)), value(std::move(value)), qualifiers(std::move(qualifiers)), type(std::move(type)) {}
-            
-            const p_expr name; // Use p_expr instead of expr_identifier since variables can be declared within scopes.
-            const p_expr value;
-            const std::vector<variable_qualifier> qualifiers;
-            const p_expr type;
-            
-            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
-                buffer += _indent(indent++) + "stmt_declaration\n";
-                buffer += _indent(indent) + "name:\n";
-                name->pretty_debug(process, buffer, indent + 1);
-                buffer += _indent(indent) + "type:\n";
-                type->pretty_debug(process, buffer, indent + 1);
-                buffer += _indent(indent) + "value:\n";
-                value->pretty_debug(process, buffer, indent + 1);
-                buffer += _indent(indent) + "qualifiers: [NOT ADDED]\n";
-            }
-        };
-        
         struct stmt_return : stmt {
             stmt_return(const core::lisel& selection, p_expr& expression)
                 : stmt(selection, node_type::STMT_RETURN), expression(std::move(expression)) {}
@@ -415,7 +412,7 @@ namespace core {
 
         struct stmt_use : stmt {
             stmt_use(const core::lisel& selection, std::unique_ptr<expr_literal>& path)
-                : stmt(selection, node_type::STMT_USE), path(std::move(path)) {};
+                : stmt(selection, node_type::STMT_USE), path(std::move(path)) {}
 
             // The parser must ensure that this literal is a string.
             const std::unique_ptr<expr_literal> path;
@@ -428,7 +425,7 @@ namespace core {
 
         struct stmt_break : stmt {
             stmt_break(const core::lisel& selection)
-                : stmt(selection, node_type::STMT_BREAK) {};
+                : stmt(selection, node_type::STMT_BREAK) {}
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "stmt_break\n";
@@ -437,10 +434,22 @@ namespace core {
 
         struct stmt_continue : stmt {
             stmt_continue(const core::lisel& selection)
-                : stmt(selection, node_type::STMT_CONTINUE) {};
+                : stmt(selection, node_type::STMT_CONTINUE) {}
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "stmt_continue\n";
+            }
+        };
+
+        struct stmt_declaration_wrapper : stmt {
+            stmt_declaration_wrapper(std::unique_ptr<expr_declaration>&& declaration)
+                : stmt(declaration->selection, node_type::STMT_DECLARATION_WRAPPER), declaration(std::move(declaration)) {}
+
+            const std::unique_ptr<expr_declaration> declaration;
+
+            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
+                buffer += _indent(indent++) + "stmt_declaration_wrapper\n";
+                declaration->pretty_debug(process, buffer, indent);
             }
         };
     }

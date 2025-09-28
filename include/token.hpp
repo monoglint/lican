@@ -12,6 +12,11 @@ namespace core {
         STRING,
         CHAR,
 
+        MUT,
+
+        STRUCT,
+        COMPONENT,
+
         TRUE,
         FALSE,
         NIL,
@@ -31,7 +36,8 @@ namespace core {
         USE,
 
         COLON,
-
+        POUND,
+        
         PLUS,
         MINUS,
         ASTERISK,
@@ -41,6 +47,8 @@ namespace core {
 
         COMMA,
         DOT,
+
+        AT,
 
         AMPERSAND,
         PIPE,

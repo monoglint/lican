@@ -1,4 +1,5 @@
 #include <unordered_set>
+#include <unordered_map>
 
 #include "core.hpp"
 #include "ast.hpp"
@@ -177,7 +178,14 @@ static core::ast::p_expr binary_expression_right_associative(parse_state& state,
 }
 
 static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state) {
+    const bool is_mutable = state.now().type == core::token_type::POUND;
+    if (is_mutable) state.next();
+
+    const bool is_reference = state.now().type == core::token_type::AT;
+    if (is_reference) state.next();
+
     core::ast::p_expr source = parse_scope_resolution(state);
+
     std::vector<std::unique_ptr<core::ast::expr_type>> argument_list = {};
 
     if (state.now().type == core::token_type::LARROW) {
@@ -189,13 +197,12 @@ static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state)
         state.expect(core::token_type::RARROW, "Expected a closing arrow inside parameters list.");
     }
 
-    return std::make_unique<core::ast::expr_type>(core::lisel(source->selection, state.now().selection), source, argument_list);
+    return std::make_unique<core::ast::expr_type>(core::lisel(source->selection, state.now().selection), source, argument_list, is_mutable, is_reference);
 }
 
 static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_state& state) {
     const core::token& start_token = state.now();
     
-    std::vector<core::ast::parameter_qualifier> qualifiers = {};
     auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
 
     core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
@@ -209,7 +216,7 @@ static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_sta
     else
         default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
 
-    return std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, qualifiers, type);
+    return std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), name, default_value, type);
 }
 
 static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
@@ -417,8 +424,7 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.now().selection), statement_list);
 }
 
-static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse_state& state) {
-    std::vector<core::ast::variable_qualifier> qualifiers = {};
+static std::unique_ptr<core::ast::stmt_declaration_wrapper> parse_stmt_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
     core::ast::p_expr name = parse_scope_resolution(state);
@@ -437,8 +443,10 @@ static std::unique_ptr<core::ast::stmt_declaration> parse_stmt_declaration(parse
         default:
             value = std::make_unique<core::ast::expr_none>(state.now().selection);
     }
-    
-    return std::make_unique<core::ast::stmt_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, qualifiers, type);
+
+    auto declaration = std::make_unique<core::ast::expr_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, type);
+
+    return std::make_unique<core::ast::stmt_declaration_wrapper>(std::move(declaration));
 }
 
 static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
@@ -468,7 +476,7 @@ static core::ast::p_stmt parse_statement(parse_state& state) {
         case core::token_type::IF: return parse_stmt_if(state);
         case core::token_type::WHILE: return parse_stmt_while(state);
         case core::token_type::LBRACE: return parse_stmt_body(state);
-        case core::token_type::DEC: return parse_stmt_declaration(state);   // For variable qualifiers, we'll check for those and fallthrough.
+        case core::token_type::DEC: return parse_stmt_declaration(state);
         case core::token_type::RETURN: return parse_stmt_return(state);
         case core::token_type::USE: return parse_stmt_use(state);
         case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
