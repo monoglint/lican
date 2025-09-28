@@ -53,7 +53,6 @@ namespace core {
             STMT_USE,
             STMT_BREAK,
             STMT_CONTINUE,
-            STMT_DECLARATION_WRAPPER,
         };
         
         // AST nodes
@@ -188,6 +187,10 @@ namespace core {
                 buffer += _indent(indent) + "operand\n";
                 operand->pretty_debug(process, buffer, indent + 1);
             }
+
+            inline bool is_wrappable() const override {
+                return opr.type == token_type::DOUBLE_PLUS || opr.type == token_type::DOUBLE_MINUS;
+            }
         };
 
         struct expr_binary : expr {
@@ -310,6 +313,10 @@ namespace core {
                 type->pretty_debug(process, buffer, indent + 1);
                 buffer += _indent(indent) + "value:\n";
                 value->pretty_debug(process, buffer, indent + 1);
+            }
+
+            inline bool is_wrappable() const override {
+                return true;
             }
         };
         
@@ -438,18 +445,6 @@ namespace core {
 
             inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
                 buffer += _indent(indent) + "stmt_continue\n";
-            }
-        };
-
-        struct stmt_declaration_wrapper : stmt {
-            stmt_declaration_wrapper(std::unique_ptr<expr_declaration>&& declaration)
-                : stmt(declaration->selection, node_type::STMT_DECLARATION_WRAPPER), declaration(std::move(declaration)) {}
-
-            const std::unique_ptr<expr_declaration> declaration;
-
-            inline void pretty_debug(const liprocess& process, std::string& buffer, uint8_t indent = 0) const override {
-                buffer += _indent(indent++) + "stmt_declaration_wrapper\n";
-                declaration->pretty_debug(process, buffer, indent);
             }
         };
     }

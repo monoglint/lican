@@ -17,12 +17,10 @@ struct semantic_state {
     core::sym::p_crate focused_symbol = std::make_unique<core::sym::crate_root>();
 };
 
-static bool walk_stmt_declaration(semantic_state& state, core::ast::stmt_declaration_wrapper&& node) {
-    core::ast::expr_declaration& subnode = *node.declaration;
-
+static bool walk_stmt_declaration(semantic_state& state, core::ast::expr_declaration* node) {
     // Check if the value of the node is a function.
 
-    if (subnode.value->type == core::ast::node_type::EXPR_FUNCTION) {
+    if (node->value->type == core::ast::node_type::EXPR_FUNCTION) {
         // build(function, parameter_types, return_type)
         
         return true;
@@ -33,10 +31,21 @@ static bool walk_stmt_declaration(semantic_state& state, core::ast::stmt_declara
     return true;
 }
 
-static bool walk_statement(semantic_state& state, core::ast::p_stmt& statement) {
+static bool walk_expression(semantic_state& state, const core::ast::p_expr& node) {
+    switch (node->type) {
+        case core::ast::node_type::EXPR_DECLARATION:
+            return walk_stmt_declaration(state, dynamic_cast<core::ast::expr_declaration*>(node.get()));
+    }
+}
+
+static bool walk_stmt_wrapper(semantic_state& state, core::ast::stmt_wrapper* node) {
+    return walk_expression(state, node->expression);
+}
+
+static bool walk_statement(semantic_state& state, core::ast::p_stmt statement) {
     switch (statement->type) {
-        case core::ast::node_type::STMT_DECLARATION_WRAPPER:
-            return dynamic_cast<core::ast::stmt_declaration_wrapper*>(statement.get());
+        case core::ast::node_type::STMT_WRAPPER:
+            return walk_stmt_wrapper(state, dynamic_cast<core::ast::stmt_wrapper*>(statement.get()));
     }
     return false;
 }

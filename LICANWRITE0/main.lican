@@ -1,1 +1,1 @@
-dec x: @int = 5
+while (dec x = 0) < 3 x++

@@ -247,24 +247,48 @@ static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state
     return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body, return_type); 
 }
 
-static core::ast::p_expr parse_primary_expression(parse_state& state) {
-    const core::token& tok = state.next();
+static std::unique_ptr<core::ast::expr_declaration> parse_expr_declaration(parse_state& state) {
+    const core::token& start_token = state.next();
+    
+    core::ast::p_expr name = parse_scope_resolution(state);
+    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
 
-    switch (tok.type) {
+    core::ast::p_expr value;
+
+    switch (state.now().type) {
+        case core::token_type::LPAREN:
+            value = parse_expr_function(state);
+            break;
+        case core::token_type::EQUAL:
+            state.pos++;
+            value = parse_expression(state);
+            break;
+        default:
+            value = std::make_unique<core::ast::expr_none>(state.now().selection);
+    }
+
+    return std::make_unique<core::ast::expr_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, type);
+}
+
+static core::ast::p_expr parse_primary_expression(parse_state& state) {
+    switch (state.now().type) {
         case core::token_type::IDENTIFIER:
-            return std::make_unique<core::ast::expr_identifier>(tok.selection);
+            return std::make_unique<core::ast::expr_identifier>(state.next().selection);
         case core::token_type::NUMBER:
-            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::NUMBER);
+            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::NUMBER);
         case core::token_type::STRING:
-            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::STRING);
+            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::STRING);
         case core::token_type::CHAR:
-            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::CHAR);
+            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::CHAR);
         case core::token_type::FALSE: [[fallthrough]];
         case core::token_type::TRUE:
-            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::BOOL);
+            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::BOOL);
         case core::token_type::NIL:
-            return std::make_unique<core::ast::expr_literal>(tok.selection, core::ast::expr_literal::literal_type::NIL);
+            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::NIL);
+        case core::token_type::DEC:
+            return parse_expr_declaration(state);
         case core::token_type::LPAREN: {
+            state.next();
             core::ast::p_expr expr = parse_expression(state);
             state.expect(core::token_type::RPAREN, "Expected ')' after expression.");
             return expr;
@@ -273,9 +297,9 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
             break;
     }
 
-    state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "Unexpected token.");
+    state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Unexpected token.");
 
-    return std::make_unique<core::ast::expr_invalid>(tok.selection);
+    return std::make_unique<core::ast::expr_invalid>(state.now().selection);
 }
 
 static core::ast::p_expr parse_scope_resolution(parse_state& state) {
@@ -424,31 +448,6 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.now().selection), statement_list);
 }
 
-static std::unique_ptr<core::ast::stmt_declaration_wrapper> parse_stmt_declaration(parse_state& state) {
-    const core::token& start_token = state.next();
-    
-    core::ast::p_expr name = parse_scope_resolution(state);
-    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
-
-    core::ast::p_expr value;
-
-    switch (state.now().type) {
-        case core::token_type::LPAREN:
-            value = parse_expr_function(state);
-            break;
-        case core::token_type::EQUAL:
-            state.pos++;
-            value = parse_expression(state);
-            break;
-        default:
-            value = std::make_unique<core::ast::expr_none>(state.now().selection);
-    }
-
-    auto declaration = std::make_unique<core::ast::expr_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, type);
-
-    return std::make_unique<core::ast::stmt_declaration_wrapper>(std::move(declaration));
-}
-
 static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
     const core::token& start_token = state.next();
 
@@ -472,11 +471,17 @@ static std::unique_ptr<core::ast::stmt_use> parse_stmt_use(parse_state& state) {
 static core::ast::p_stmt parse_statement(parse_state& state) {
     const core::token& tok = state.now();
 
+    /* Note: Declarations are statement wrappable expressions in this langauge to allow for syntax like:
+
+        while (dec i = 0) < 5 {
+            i++
+        }
+    */
+
     switch (tok.type) {
         case core::token_type::IF: return parse_stmt_if(state);
         case core::token_type::WHILE: return parse_stmt_while(state);
         case core::token_type::LBRACE: return parse_stmt_body(state);
-        case core::token_type::DEC: return parse_stmt_declaration(state);
         case core::token_type::RETURN: return parse_stmt_return(state);
         case core::token_type::USE: return parse_stmt_use(state);
         case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
