@@ -1,1 +1,1 @@
-while (dec x = 0) < 3 x++
+dec main() { use "hello world" }

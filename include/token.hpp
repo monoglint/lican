@@ -38,6 +38,8 @@ namespace core {
         COLON,
         POUND,
         
+        NAMESPACE,
+        
         PLUS,
         MINUS,
         ASTERISK,

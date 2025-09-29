@@ -24,6 +24,7 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"use", core::token_type::USE},
     {"struct", core::token_type::STRUCT},
     {"component", core::token_type::COMPONENT},
+    {"namespace", core::token_type::NAMESPACE},
 };
 
 static const std::unordered_map<std::string, core::token_type> double_character_map = {

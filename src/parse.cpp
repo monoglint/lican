@@ -1,3 +1,19 @@
+/*
+
+TERMINOLOGY NOTE
+
+A scoped statement is named in regards to a semantic scope. This means that a scoped statement is:
+    - struct declaration
+    - file inclusion
+    - namespace declaration
+
+A scoped statement is NOT any of the following:
+    - if
+    - while
+    - closure declaration
+
+*/
+
 #include <unordered_set>
 #include <unordered_map>
 
@@ -110,6 +126,7 @@ struct parse_state {
         return pos + amount < token_list.size() - 1;
     }
 
+    // Accounts for EOF token
     inline bool at_eof() const {
         return pos >= token_list.size() - 1;
     }
@@ -119,6 +136,8 @@ struct parse_state {
         if (now.type != type)
             process.add_log(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
         
+        // We expect to return an incorrect token.
+        // Since the parser handles tokens by reference, it is not a good idea to make new temporary ones.
         return now;
     }
 };
@@ -127,10 +146,12 @@ struct parse_state {
 static core::ast::p_expr parse_expression(parse_state& state);
 static core::ast::p_expr parse_scope_resolution(parse_state& state);
 static core::ast::p_stmt parse_statement(parse_state& state);
+static core::ast::p_s_stmt parse_scoped_statement(parse_state& state);
+
 static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state);
 static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state);
 
-static core::ast::p_expr PARSE_OPTIONAL_TYPE(parse_state& state) {
+static core::ast::p_expr parse_optional_type(parse_state& state) {
     if (state.now().type == core::token_type::COLON) {
         state.pos++;
         return parse_expr_type(state);
@@ -205,7 +226,7 @@ static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_sta
     
     auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
 
-    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
+    core::ast::p_expr type = parse_optional_type(state);
     
     core::ast::p_expr default_value;
 
@@ -230,7 +251,7 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
     do {
         state.pos++;
         parameter_list.emplace_back(parse_expr_parameter(state));
-    } while (!state.at_eof(), state.now().type == core::token_type::COMMA);
+    } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
     
     state.expect(core::token_type::RPAREN, "Expected a closing parenthesis inside parameters list.");
     
@@ -240,34 +261,36 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
 static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state& state) {
     const core::token& start_token = state.now();
     std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list = parse_expr_parameter_list(state);
-    core::ast::p_expr return_type = PARSE_OPTIONAL_TYPE(state);
+    core::ast::p_expr return_type = parse_optional_type(state);
 
     core::ast::p_stmt body = parse_statement(state);
 
     return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), parameter_list, body, return_type); 
 }
 
-static std::unique_ptr<core::ast::expr_declaration> parse_expr_declaration(parse_state& state) {
+static std::unique_ptr<core::ast::expr_local_declaration> parse_expr_local_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
     core::ast::p_expr name = parse_scope_resolution(state);
-    core::ast::p_expr type = PARSE_OPTIONAL_TYPE(state);
+    core::ast::p_expr type = parse_optional_type(state);
 
     core::ast::p_expr value;
 
     switch (state.now().type) {
-        case core::token_type::LPAREN:
-            value = parse_expr_function(state);
-            break;
         case core::token_type::EQUAL:
             state.pos++;
             value = parse_expression(state);
+            break;
+        case core::token_type::LPAREN:
+            value = std::make_unique<core::ast::expr_invalid>(state.now().selection);
+            state.process.add_log(core::lilog::log_level::ERROR, state.next().selection, "Functions can not be declared in function bodies. Declare a closure instead.");
+
             break;
         default:
             value = std::make_unique<core::ast::expr_none>(state.now().selection);
     }
 
-    return std::make_unique<core::ast::expr_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, type);
+    return std::make_unique<core::ast::expr_local_declaration>(core::lisel(start_token.selection, state.next().selection), name, value, type);
 }
 
 static core::ast::p_expr parse_primary_expression(parse_state& state) {
@@ -286,9 +309,9 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
         case core::token_type::NIL:
             return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::NIL);
         case core::token_type::DEC:
-            return parse_expr_declaration(state);
+            return parse_expr_local_declaration(state);
         case core::token_type::LPAREN: {
-            state.next();
+            state.pos++;
             core::ast::p_expr expr = parse_expression(state);
             state.expect(core::token_type::RPAREN, "Expected ')' after expression.");
             return expr;
@@ -299,7 +322,7 @@ static core::ast::p_expr parse_primary_expression(parse_state& state) {
 
     state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Unexpected token.");
 
-    return std::make_unique<core::ast::expr_invalid>(state.now().selection);
+    return std::make_unique<core::ast::expr_invalid>(state.next().selection);
 }
 
 static core::ast::p_expr parse_scope_resolution(parse_state& state) {
@@ -383,7 +406,7 @@ static core::ast::p_expr parse_expr_ternary(parse_state& state) {
     if (state.now().type != core::token_type::QUESTION)
         return first;
     
-    state.next();
+    state.pos++;
     core::ast::p_expr second = parse_expression(state);
     state.expect(core::token_type::COLON, "Expected a colon.");
     core::ast::p_expr third = parse_expression(state);
@@ -395,6 +418,7 @@ static core::ast::p_expr parse_assignment(parse_state& state) {
     return binary_expression_left_associative(state, &parse_expr_ternary, set_assignment);
 }
 
+// Entry point to pratt parser design
 static core::ast::p_expr parse_expression(parse_state& state) {
     return parse_assignment(state);
 }
@@ -448,6 +472,23 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.now().selection), statement_list);
 }
 
+// worst case of boilerplate ever. maybe fix. is it really that necessary?
+static std::unique_ptr<core::ast::s_stmt_scoped_body> parse_scoped_statement_body(parse_state& state) {
+    const core::token& brace_token = state.next();
+    std::vector<core::ast::p_s_stmt> statement_list;
+
+    while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
+        statement_list.emplace_back(parse_scoped_statement(state));
+    }
+
+    if (state.at_eof())
+        state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Expected right brace, got EOF.");
+    else
+        state.pos++;
+        
+    return std::make_unique<core::ast::s_stmt_scoped_body>(core::lisel(brace_token.selection, state.now().selection), statement_list);
+}
+
 static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
     const core::token& start_token = state.next();
 
@@ -461,31 +502,83 @@ static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& st
     return std::make_unique<core::ast::stmt_return>(core::lisel(start_token.selection, expression->selection), expression);
 }
 
-static std::unique_ptr<core::ast::stmt_use> parse_stmt_use(parse_state& state) {
+static std::unique_ptr<core::ast::s_stmt_use> parse_s_stmt_use(parse_state& state) {
     const core::token& start_token = state.next();
-    auto string = std::make_unique<core::ast::expr_literal>(state.expect(core::token_type::STRING, "Expected a string.").selection, core::ast::expr_literal::literal_type::STRING);
+    const core::token& value_token = state.expect(core::token_type::STRING, "Expected a string.");
 
-    return std::make_unique<core::ast::stmt_use>(core::lisel(start_token.selection, string->selection), string);
+    auto value_node = std::make_unique<core::ast::expr_literal>(value_token.selection, core::ast::expr_literal::literal_type::STRING);
+
+    return std::make_unique<core::ast::s_stmt_use>(core::lisel(start_token.selection, value_node->selection), value_node);
 }
 
-static core::ast::p_stmt parse_statement(parse_state& state) {
+static std::unique_ptr<core::ast::s_stmt_namespace> parse_s_stmt_namespace(parse_state& state) {
+    const core::token& start_token = state.next();
+    const core::token& value_token = state.expect(core::token_type::IDENTIFIER, "Expected an identifier.");
+
+    auto name_node = std::make_unique<core::ast::expr_identifier>(value_token.selection);
+    core::ast::p_s_stmt content = parse_scoped_statement(state);
+    
+    return std::make_unique<core::ast::s_stmt_namespace>(core::lisel(start_token.selection, content->selection), name_node, content); 
+}
+
+static std::unique_ptr<core::ast::s_stmt_declaration> parse_s_declaration(parse_state& state) {
+    const core::token& start_token = state.next();
+    
+    core::ast::p_expr name = parse_scope_resolution(state);
+    core::ast::p_expr type = parse_optional_type(state);
+
+    core::ast::p_expr value;
+
+    switch (state.now().type) {
+        case core::token_type::LPAREN:
+            value = parse_expr_function(state);
+            break;
+        case core::token_type::EQUAL:
+            state.pos++;
+            value = parse_expression(state);
+            break;
+        default:
+            value = std::make_unique<core::ast::expr_none>(state.now().selection);
+    }
+
+    return std::make_unique<core::ast::s_stmt_declaration>(core::lisel(start_token.selection, state.now().selection), name, value, type);
+}
+
+// Find statements expected in a namespace or a struct.
+static core::ast::p_s_stmt parse_scoped_statement(parse_state& state) {
     const core::token& tok = state.now();
 
-    /* Note: Declarations are statement wrappable expressions in this langauge to allow for syntax like:
-
-        while (dec i = 0) < 5 {
-            i++
+    switch (tok.type) {
+        case core::token_type::USE: return parse_s_stmt_use(state);
+        case core::token_type::NAMESPACE: return parse_s_stmt_namespace(state);
+        case core::token_type::DEC: return parse_s_declaration(state);
+        case core::token_type::LBRACE: return parse_scoped_statement_body(state);
+        default: {
+            core::ast::p_stmt statement = parse_statement(state);
+            state.process.add_log(core::lilog::log_level::ERROR, statement->selection, "The given statement can only be used in a function body.");
+            return std::make_unique<core::ast::s_stmt_invalid>(statement->selection);
         }
-    */
+    }
+}
+
+// Find statements expected in function bodies.
+static core::ast::p_stmt parse_statement(parse_state& state) {
+    const core::token& tok = state.now();
 
     switch (tok.type) {
         case core::token_type::IF: return parse_stmt_if(state);
         case core::token_type::WHILE: return parse_stmt_while(state);
         case core::token_type::LBRACE: return parse_stmt_body(state);
         case core::token_type::RETURN: return parse_stmt_return(state);
-        case core::token_type::USE: return parse_stmt_use(state);
         case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
         case core::token_type::CONTINUE: return std::make_unique<core::ast::stmt_continue>(state.next().selection);
+
+        // Capture this for 
+        case core::token_type::USE: 
+        case core::token_type::NAMESPACE: 
+            state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "The given statement can not be used in a function body.");
+            return std::make_unique<core::ast::stmt_invalid>(state.next().selection);
+
         default: {
             core::ast::p_expr expression = parse_expression(state);
             
@@ -504,7 +597,7 @@ bool core::frontend::parse(core::liprocess& process, const core::t_file_id file_
     auto root = core::ast::ast_root();
     
     while (!state.at_eof()) {
-        root.statement_list.emplace_back(parse_statement(state));
+        root.statement_list.emplace_back(parse_scoped_statement(state));
     }
 
     state.file.dump_ast_root = std::any(std::make_shared<core::ast::ast_root>(std::move(root)));
