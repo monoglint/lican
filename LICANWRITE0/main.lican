@@ -1,1 +1,1 @@
-dec main() { use "hello world" }
+dec main() {}

@@ -28,6 +28,9 @@ bool run(core::liprocess& process) {
     if (!core::frontend::parse(process, 0))
         return false;
 
+    if (!core::frontend::semantic_analyze(process, 0))
+        return false;
+
     return true;
 }
 

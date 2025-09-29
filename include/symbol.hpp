@@ -12,11 +12,10 @@ namespace core {
             
             ALIAS,
             PRIMITIVE,
-            STRUCT,
             ARRAY,
 
-            FUNCTION,
-
+            VARIABLE_DECLARATION,
+            TYPE_DECLARATION,
             NAMESPACE,
         };
 
@@ -25,11 +24,10 @@ namespace core {
                 : type(type) {}
 
             virtual ~symbol() = default;
-
-            const symbol_type type;
+            symbol_type type;
         };
 
-        using p_symbol = std::unique_ptr<symbol>;
+        using up_symbol = std::unique_ptr<symbol>;
 
         // A crate is a symbol that is guaranteed to hold other symbols.
         struct crate : symbol {
@@ -38,7 +36,17 @@ namespace core {
 
             virtual ~crate() = default;
 
-            std::unordered_map<std::string, p_symbol> symbol_list;
+            std::unordered_map<std::string, up_symbol> symbol_list;
+        };
+
+        // A symbol that is found directly within a crate.
+        struct branch : symbol {
+            branch(const std::string& name, const symbol_type type)
+                : symbol(type), name(name) {}
+
+            virtual ~branch() = default;
+
+            mutable std::string name;
         };
 
         struct sym_invalid : symbol {
@@ -54,21 +62,18 @@ namespace core {
             virtual ~type() = default;
         };
 
-        using p_crate = std::unique_ptr<crate>;
-        using p_type = std::unique_ptr<type>;
+        using up_crate = std::unique_ptr<crate>;
+        using up_type = std::unique_ptr<type>;
+        using up_branch = std::unique_ptr<branch>;
 
         struct type_alias : type {
-            type_alias(const p_type& source, std::vector<type_alias>& argument_list, const bool is_mutable = false, const bool is_reference = false)
+            type_alias(type* source, std::vector<std::reference_wrapper<type_alias>>&& argument_list = {}, const bool is_mutable = false, const bool is_reference = false)
                 : type(symbol_type::ALIAS), source(source), argument_list(std::move(argument_list)), is_mutable(is_mutable), is_reference(is_reference) {}
-            
-            // chose a separate constructor rather than an optional to simplify the parameters
-            type_alias(const p_type& source, const bool is_mutable = false, const bool is_reference = false)
-                : type(symbol_type::ALIAS), source(source), argument_list(std::nullopt), is_mutable(is_mutable), is_reference(is_reference) {}
-            
-            const p_type& source;
-            const std::optional<std::vector<type_alias>> argument_list;
-            const bool is_mutable;
-            const bool is_reference; 
+    
+            type* source;
+            std::vector<std::reference_wrapper<type_alias>> argument_list;
+            bool is_mutable;
+            bool is_reference; 
         };
 
 
@@ -79,25 +84,26 @@ namespace core {
             size_t size;
         };
 
-        struct type_struct : type {
-            type_struct()
-                : type(symbol_type::STRUCT) {}
-        };
-
         struct type_array : type {
-            type_array(const size_t size, p_type& content_type)
+            type_array(const size_t size, up_type& content_type)
                 : type(symbol_type::ARRAY), size(size), content_type(std::move(content_type)) {}
 
-            const size_t size;
-            const p_type content_type;
+            size_t size;
+            up_type content_type;
         };
 
-        struct sym_function : symbol {
-            sym_function(const type_alias& return_type, const std::vector<type_alias>& parameter_type_list)
-                : symbol(symbol_type::FUNCTION), return_type(std::move(return_type)), parameter_type_list(std::move(parameter_type_list)) {}
+        struct sym_variable_declaration : branch {
+            sym_variable_declaration(const std::string& name, const type_alias& type)
+                : branch(name, symbol_type::VARIABLE_DECLARATION), type(std::move(type)) {}
 
-            const type_alias return_type;
-            const std::vector<type_alias> parameter_type_list;
+            type_alias type;
+        };
+
+        struct sym_type_declaration : branch {
+            sym_type_declaration(const std::string& name, const type_alias& type)
+                : branch(name, symbol_type::TYPE_DECLARATION), type(std::move(type)) {}
+
+            type_alias type;
         };
 
         struct crt_root : crate {
@@ -105,9 +111,9 @@ namespace core {
                 : crate(symbol_type::ROOT) {}
         };
 
-        struct crt_namespace : crate {
-            crt_namespace()
-                : crate(symbol_type::NAMESPACE) {}
+        struct crt_namespace : crate, branch {
+            crt_namespace(const std::string& name)
+                : crate(symbol_type::NAMESPACE), branch(name, symbol_type::NAMESPACE) {}
         };
     }
 }
