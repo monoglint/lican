@@ -1,1 +1,1 @@
-dec main() {}
+dec main() { io::write(5 + 3 * 2 / 5) io::write("bye") return 3 }

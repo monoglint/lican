@@ -23,7 +23,7 @@ A scoped statement is NOT any of the following:
 
 struct parse_state;
 
-using t_p_expression_function = core::ast::up_expr(*)(parse_state& state);
+using t_p_expression_function = core::ast::node_id(*)(parse_state& state);
 using t_operator_set = std::unordered_set<core::token_type>;
 
 static const t_operator_set set_scope_resolution = {
@@ -102,6 +102,8 @@ struct parse_state {
 
     const std::vector<core::token>& token_list; // Ref to process property
 
+    core::ast::ast_arena arena;
+
     core::t_pos pos = 0;
 
     inline const core::token& now() const {
@@ -143,105 +145,104 @@ struct parse_state {
 };
 
 // Forward declarations
-static core::ast::up_expr parse_expression(parse_state& state);
-static core::ast::up_expr parse_scope_resolution(parse_state& state);
-static core::ast::up_stmt parse_statement(parse_state& state);
-static core::ast::up_s_stmt parse_scoped_statement(parse_state& state);
+static core::ast::node_id parse_expression(parse_state& state);
+static core::ast::node_id parse_scope_resolution(parse_state& state);
+static core::ast::node_id parse_statement(parse_state& state);
+static core::ast::node_id parse_scoped_statement(parse_state& state);
 
-static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state);
-static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state);
+static core::ast::node_id parse_expr_type(parse_state& state);
+static core::ast::node_id parse_stmt_body(parse_state& state);
 
-static core::ast::up_expr parse_optional_type(parse_state& state) {
+static core::ast::node_id parse_optional_type(parse_state& state) {
     if (state.now().type == core::token_type::COLON) {
         state.pos++;
         return parse_expr_type(state);
     }
 
-    return std::make_unique<core::ast::expr_none>(state.now().selection);
+    return state.arena.insert(core::ast::expr_none(state.now().selection));
 }
 
-static core::ast::up_expr binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
-    core::ast::up_expr left = lower(state);
+static core::ast::node_id binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
+    core::ast::node_id left = lower(state);
 
     while (!state.at_eof() && set.find(state.now().type) != set.end()) {
         const core::token& opr = state.next();
-        core::ast::up_expr right = lower(state);
+        core::ast::node_id right = lower(state);
 
-        left = std::make_unique<core::ast::expr_binary>(
-            core::lisel(left->selection, right->selection),
-            std::move(left),
-            std::move(right),
+        left = state.arena.insert(core::ast::expr_binary(
+            core::lisel(state.arena.get_ptr(left)->selection, state.arena.get_ptr(right)->selection),
+            left,
+            right,
             opr
-        );
+        ));
     }
 
     return left;
 }
 
-static core::ast::up_expr binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
-    core::ast::up_expr left = lower(state);
+static core::ast::node_id binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
+    core::ast::node_id left = lower(state);
 
     if (!state.at_eof() && set.find(state.now().type) != set.end()) {
         const core::token& opr = state.next();
 
         // recurse on *binary_expression* instead of just *lower*
-        core::ast::up_expr right = binary_expression_right_associative(state, lower, set);
+        core::ast::node_id right = binary_expression_right_associative(state, lower, set);
         
-        return std::make_unique<core::ast::expr_binary>(
-            core::lisel(left->selection, right->selection),
-            std::move(left),
-            std::move(right),
+        return state.arena.insert(core::ast::expr_binary(
+            core::lisel(state.arena.get_ptr(left)->selection, state.arena.get_ptr(right)->selection),
+            left,
+            right,
             opr
-        );
+        ));
     }
 
     return left;
 }
 
-static std::unique_ptr<core::ast::expr_type> parse_expr_type(parse_state& state) {
+static core::ast::node_id parse_expr_type(parse_state& state) {
     const bool is_mutable = state.now().type == core::token_type::POUND;
     if (is_mutable) state.next();
 
     const bool is_reference = state.now().type == core::token_type::AT;
     if (is_reference) state.next();
 
-    core::ast::up_expr source = parse_scope_resolution(state);
+    core::ast::node_id source = parse_scope_resolution(state);
 
-    std::vector<std::unique_ptr<core::ast::expr_type>> argument_list = {};
+    std::vector<core::ast::node_id> argument_list = {};
 
     if (state.now().type == core::token_type::LARROW) {
         do {
             state.pos++;
-            argument_list.emplace_back(parse_expr_type(state));
+            argument_list.push_back(parse_expr_type(state));
         } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
 
         state.expect(core::token_type::RARROW, "Expected a closing arrow inside parameters list.");
     }
 
-    return std::make_unique<core::ast::expr_type>(core::lisel(source->selection, state.now().selection), std::move(source), std::move(argument_list), is_mutable, is_reference);
+    return state.arena.insert(core::ast::expr_type(core::lisel(state.arena.get_ptr(source)->selection, state.now().selection), source, std::move(argument_list), is_mutable, is_reference));
 }
 
-static std::unique_ptr<core::ast::expr_parameter> parse_expr_parameter(parse_state& state) {
+static core::ast::node_id parse_expr_parameter(parse_state& state) {
     const core::token& start_token = state.now();
     
-    auto name = std::make_unique<core::ast::expr_identifier>(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection);
-
-    core::ast::up_expr type = parse_optional_type(state);
+    core::ast::node_id name = state.arena.insert(core::ast::expr_identifier(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection));
+    core::ast::node_id type = parse_optional_type(state);
     
-    core::ast::up_expr default_value;
+    core::ast::node_id default_value;
 
     if (state.now().type == core::token_type::EQUAL) {
         state.pos++;
         default_value = parse_expression(state);
     }
     else
-        default_value = std::make_unique<core::ast::expr_none>(state.now().selection);
+        default_value = state.arena.insert(core::ast::expr_none(state.now().selection));
 
-    return std::make_unique<core::ast::expr_parameter>(core::lisel(start_token.selection, state.now().selection), std::move(name), std::move(default_value), std::move(type));
+    return state.arena.insert(core::ast::expr_parameter(core::lisel(start_token.selection, state.now().selection), name, default_value, type));
 }
 
-static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parameter_list(parse_state& state) {
-    std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list;
+static std::vector<core::ast::node_id> parse_expr_parameter_list(parse_state& state) {
+    std::vector<core::ast::node_id> parameter_list;
     
     if (state.peek(1).type == core::token_type::RPAREN) {
         state.pos += 2;
@@ -250,7 +251,7 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
     
     do {
         state.pos++;
-        parameter_list.emplace_back(parse_expr_parameter(state));
+        parameter_list.push_back(parse_expr_parameter(state));
     } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
     
     state.expect(core::token_type::RPAREN, "Expected a closing parenthesis inside parameters list.");
@@ -258,23 +259,23 @@ static std::vector<std::unique_ptr<core::ast::expr_parameter>> parse_expr_parame
     return parameter_list;
 }
 
-static std::unique_ptr<core::ast::expr_function> parse_expr_function(parse_state& state) {
+static core::ast::node_id parse_expr_function(parse_state& state) {
     const core::token& start_token = state.now();
-    std::vector<std::unique_ptr<core::ast::expr_parameter>> parameter_list = parse_expr_parameter_list(state);
-    core::ast::up_expr return_type = parse_optional_type(state);
+    std::vector<core::ast::node_id> parameter_list = parse_expr_parameter_list(state);
+    core::ast::node_id return_type = parse_optional_type(state);
 
-    core::ast::up_stmt body = parse_statement(state);
+    core::ast::node_id body = parse_statement(state);
 
-    return std::make_unique<core::ast::expr_function>(core::lisel(start_token.selection, state.now().selection), std::move(parameter_list), std::move(body), std::move(return_type)); 
+    return state.arena.insert(core::ast::expr_function(core::lisel(start_token.selection, state.now().selection), std::move(parameter_list), body, return_type)); 
 }
 
-static std::unique_ptr<core::ast::expr_local_declaration> parse_expr_local_declaration(parse_state& state) {
+static core::ast::node_id parse_expr_local_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
-    core::ast::up_expr name = parse_scope_resolution(state);
-    core::ast::up_expr type = parse_optional_type(state);
+    core::ast::node_id name = parse_scope_resolution(state);
+    core::ast::node_id type = parse_optional_type(state);
 
-    core::ast::up_expr value;
+    core::ast::node_id value;
 
     switch (state.now().type) {
         case core::token_type::EQUAL:
@@ -282,37 +283,37 @@ static std::unique_ptr<core::ast::expr_local_declaration> parse_expr_local_decla
             value = parse_expression(state);
             break;
         case core::token_type::LPAREN:
-            value = std::make_unique<core::ast::expr_invalid>(state.now().selection);
+            value = state.arena.insert(core::ast::expr_invalid(state.now().selection));
             state.process.add_log(core::lilog::log_level::ERROR, state.next().selection, "Functions can not be declared in function bodies. Declare a closure instead.");
 
             break;
         default:
-            value = std::make_unique<core::ast::expr_none>(state.now().selection);
+            value = state.arena.insert(core::ast::expr_none(state.now().selection));
     }
 
-    return std::make_unique<core::ast::expr_local_declaration>(core::lisel(start_token.selection, state.next().selection), std::move(name), std::move(value), std::move(type));
+    return state.arena.insert(core::ast::expr_local_declaration(core::lisel(start_token.selection, state.next().selection), std::move(name), std::move(value), std::move(type)));
 }
 
-static core::ast::up_expr parse_primary_expression(parse_state& state) {
+static core::ast::node_id parse_primary_expression(parse_state& state) {
     switch (state.now().type) {
         case core::token_type::IDENTIFIER:
-            return std::make_unique<core::ast::expr_identifier>(state.next().selection);
+            return state.arena.insert(core::ast::expr_identifier(state.next().selection));
         case core::token_type::NUMBER:
-            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::NUMBER);
+            return state.arena.insert(core::ast::expr_literal(state.next().selection, core::ast::expr_literal::literal_type::NUMBER));
         case core::token_type::STRING:
-            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::STRING);
+            return state.arena.insert(core::ast::expr_literal(state.next().selection, core::ast::expr_literal::literal_type::STRING));
         case core::token_type::CHAR:
-            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::CHAR);
+            return state.arena.insert(core::ast::expr_literal(state.next().selection, core::ast::expr_literal::literal_type::CHAR));
         case core::token_type::FALSE: [[fallthrough]];
         case core::token_type::TRUE:
-            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::BOOL);
+            return state.arena.insert(core::ast::expr_literal(state.next().selection, core::ast::expr_literal::literal_type::BOOL));
         case core::token_type::NIL:
-            return std::make_unique<core::ast::expr_literal>(state.next().selection, core::ast::expr_literal::literal_type::NIL);
+            return state.arena.insert(core::ast::expr_literal(state.next().selection, core::ast::expr_literal::literal_type::NIL));
         case core::token_type::DEC:
             return parse_expr_local_declaration(state);
         case core::token_type::LPAREN: {
             state.pos++;
-            core::ast::up_expr expr = parse_expression(state);
+            core::ast::node_id expr = parse_expression(state);
             state.expect(core::token_type::RPAREN, "Expected ')' after expression.");
             return expr;
         }
@@ -322,128 +323,128 @@ static core::ast::up_expr parse_primary_expression(parse_state& state) {
 
     state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Unexpected token.");
 
-    return std::make_unique<core::ast::expr_invalid>(state.next().selection);
+    return state.arena.insert(core::ast::expr_invalid(state.next().selection));
 }
 
-static core::ast::up_expr parse_scope_resolution(parse_state& state) {
+static core::ast::node_id parse_scope_resolution(parse_state& state) {
     return binary_expression_left_associative(state, &parse_primary_expression, set_scope_resolution);
 }
 
-static core::ast::up_expr parse_member_access(parse_state& state) {
+static core::ast::node_id parse_member_access(parse_state& state) {
     return binary_expression_left_associative(state, &parse_scope_resolution, set_member_access);
 }
 
-static core::ast::up_expr parse_expr_call(parse_state& state) {
-    core::ast::up_expr expression = parse_member_access(state);
+static core::ast::node_id parse_expr_call(parse_state& state) {
+    core::ast::node_id expression = parse_member_access(state);
 
     if (state.now().type != core::token_type::LPAREN)
         return expression;
 
-    std::vector<core::ast::up_expr> argument_list;
+    std::vector<core::ast::node_id> argument_list;
 
     if (state.peek(1).type != core::token_type::RPAREN)
         do {
             state.pos++;
-            argument_list.emplace_back(parse_expression(state));
+            argument_list.push_back(parse_expression(state));
         } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
     else
         state.pos++;
 
     state.expect(core::token_type::RPAREN, "Expected ')' after function call.");
 
-    return std::make_unique<core::ast::expr_call>(core::lisel(expression->selection, state.now().selection), std::move(expression), std::move(argument_list));
+    return state.arena.insert(core::ast::expr_call(core::lisel(state.arena.get_ptr(expression)->selection, state.now().selection), std::move(expression), std::move(argument_list)));
 }
 
-static core::ast::up_expr parse_expr_unary(parse_state& state) {
+static core::ast::node_id parse_expr_unary(parse_state& state) {
     const core::token& start_token = state.now();
 
     if (set_unary_pre.find(state.now().type) != set_unary_pre.end()) {
         const core::token& opr = state.next();
-        core::ast::up_expr operand = parse_expr_unary(state);
-        return std::make_unique<core::ast::expr_unary>(core::lisel(start_token.selection, operand->selection), std::move(operand), opr, false);
+        core::ast::node_id operand = parse_expr_unary(state);
+        return state.arena.insert(core::ast::expr_unary(core::lisel(start_token.selection, state.arena.get_ptr(operand)->selection), std::move(operand), opr, false));
     }
 
-    core::ast::up_expr expression = parse_expr_call(state);
+    core::ast::node_id expression = parse_expr_call(state);
 
     if (set_unary_post.find(state.now().type) != set_unary_post.end()) {
         const core::token& opr = state.next();
-        return std::make_unique<core::ast::expr_unary>(core::lisel(start_token.selection, opr.selection), std::move(expression), opr, true);
+        return state.arena.insert(core::ast::expr_unary(core::lisel(start_token.selection, opr.selection), std::move(expression), opr, true));
     }
     
     return expression;
 }
 
-static core::ast::up_expr parse_exponential(parse_state& state) {
+static core::ast::node_id parse_exponential(parse_state& state) {
     return binary_expression_right_associative(state, &parse_expr_unary, set_exponential);
 }
 
-static core::ast::up_expr parse_multiplicative(parse_state& state) {
+static core::ast::node_id parse_multiplicative(parse_state& state) {
     return binary_expression_left_associative(state, &parse_exponential, set_multiplicative);
 }
 
-static core::ast::up_expr parse_additive(parse_state& state) {
+static core::ast::node_id parse_additive(parse_state& state) {
     return binary_expression_left_associative(state, &parse_multiplicative, set_additive);
 }
 
-static core::ast::up_expr parse_numeric_comparison(parse_state& state) {
+static core::ast::node_id parse_numeric_comparison(parse_state& state) {
     return binary_expression_left_associative(state, &parse_additive, set_numeric_comparison);
 }
 
-static core::ast::up_expr parse_direct_comparison(parse_state& state) {
+static core::ast::node_id parse_direct_comparison(parse_state& state) {
     return binary_expression_left_associative(state, &parse_numeric_comparison, set_direct_comparison);
 }
 
-static core::ast::up_expr parse_and(parse_state& state) {
+static core::ast::node_id parse_and(parse_state& state) {
     return binary_expression_left_associative(state, &parse_direct_comparison, set_and);
 }
 
-static core::ast::up_expr parse_or(parse_state& state) {
+static core::ast::node_id parse_or(parse_state& state) {
     return binary_expression_left_associative(state, &parse_and, set_or);
 }
 
-static core::ast::up_expr parse_expr_ternary(parse_state& state) {
-    core::ast::up_expr first = parse_or(state);
+static core::ast::node_id parse_expr_ternary(parse_state& state) {
+    core::ast::node_id first = parse_or(state);
     if (state.now().type != core::token_type::QUESTION)
         return first;
     
     state.pos++;
-    core::ast::up_expr second = parse_expression(state);
+    core::ast::node_id second = parse_expression(state);
     state.expect(core::token_type::COLON, "Expected a colon.");
-    core::ast::up_expr third = parse_expression(state);
+    core::ast::node_id third = parse_expression(state);
     
-    return std::make_unique<core::ast::expr_ternary>(core::lisel(first->selection, third->selection), std::move(first), std::move(second), std::move(third));
+    return state.arena.insert(core::ast::expr_ternary(core::lisel(state.arena.get_ptr(first)->selection, state.arena.get_ptr(third)->selection), std::move(first), std::move(second), std::move(third)));
 }
 
-static core::ast::up_expr parse_assignment(parse_state& state) {
+static core::ast::node_id parse_assignment(parse_state& state) {
     return binary_expression_left_associative(state, &parse_expr_ternary, set_assignment);
 }
 
 // Entry point to pratt parser design
-static core::ast::up_expr parse_expression(parse_state& state) {
+static core::ast::node_id parse_expression(parse_state& state) {
     return parse_assignment(state);
 }
 
-static std::unique_ptr<core::ast::stmt_if> parse_stmt_if(parse_state& state) {
+static core::ast::node_id parse_stmt_if(parse_state& state) {
     const core::token& start_token = state.next();
-    core::ast::up_expr condition = parse_expression(state);
-    core::ast::up_stmt consequent = parse_statement(state);
-    core::ast::up_stmt alternate;
+    core::ast::node_id condition = parse_expression(state);
+    core::ast::node_id consequent = parse_statement(state);
+    core::ast::node_id alternate;
 
     if (state.now().type == core::token_type::ELSE) {
         state.pos++; // Skip else
         alternate = parse_statement(state);
     }
     else
-        alternate = std::make_unique<core::ast::stmt_none>(state.now().selection);
+        alternate = state.arena.insert(core::ast::stmt_none(state.now().selection));
 
-    return std::make_unique<core::ast::stmt_if>(core::lisel(start_token.selection, state.now().selection), std::move(condition), std::move(consequent), std::move(alternate));
+    return state.arena.insert(core::ast::stmt_if(core::lisel(start_token.selection, state.now().selection), std::move(condition), std::move(consequent), std::move(alternate)));
 }
 
-static std::unique_ptr<core::ast::stmt_while> parse_stmt_while(parse_state& state) {
+static core::ast::node_id parse_stmt_while(parse_state& state) {
     const core::token& start_token = state.next();
-    core::ast::up_expr condition = parse_expression(state);
-    core::ast::up_stmt consequent = parse_statement(state);
-    core::ast::up_stmt alternate;
+    core::ast::node_id condition = parse_expression(state);
+    core::ast::node_id consequent = parse_statement(state);
+    core::ast::node_id alternate;
 
     // In while loops, else's run if the condition fails on the first time.
     if (state.now().type == core::token_type::ELSE) {
@@ -451,17 +452,17 @@ static std::unique_ptr<core::ast::stmt_while> parse_stmt_while(parse_state& stat
         alternate = parse_statement(state);
     }
     else
-        alternate = std::make_unique<core::ast::stmt_none>(state.now().selection);
+        alternate = state.arena.insert(core::ast::stmt_none(state.now().selection));
 
-    return std::make_unique<core::ast::stmt_while>(core::lisel(start_token.selection, state.now().selection), std::move(condition), std::move(consequent), std::move(alternate));
+    return state.arena.insert(core::ast::stmt_while(core::lisel(start_token.selection, state.now().selection), std::move(condition), std::move(consequent), std::move(alternate)));
 }
 
-static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state) {
+static core::ast::node_id parse_stmt_body(parse_state& state) {
     const core::token& brace_token = state.next();
-    std::vector<core::ast::up_stmt> statement_list;
+    std::vector<core::ast::node_id> statement_list;
 
     while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
-        statement_list.emplace_back(parse_statement(state));
+        statement_list.push_back(parse_statement(state));
     }
 
     if (state.at_eof())
@@ -469,16 +470,16 @@ static std::unique_ptr<core::ast::stmt_body> parse_stmt_body(parse_state& state)
     else
         state.pos++;
         
-    return std::make_unique<core::ast::stmt_body>(core::lisel(brace_token.selection, state.now().selection), std::move(statement_list));
+    return state.arena.insert(core::ast::stmt_body(core::lisel(brace_token.selection, state.now().selection), std::move(statement_list)));
 }
 
 // worst case of boilerplate ever. maybe fix. is it really that necessary?
-static std::unique_ptr<core::ast::s_stmt_scoped_body> parse_scoped_statement_body(parse_state& state) {
+static core::ast::node_id parse_scoped_statement_body(parse_state& state) {
     const core::token& brace_token = state.next();
-    std::vector<core::ast::up_s_stmt> statement_list;
+    std::vector<core::ast::node_id> statement_list;
 
     while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
-        statement_list.emplace_back(parse_scoped_statement(state));
+        statement_list.push_back(parse_scoped_statement(state));
     }
 
     if (state.at_eof())
@@ -486,48 +487,48 @@ static std::unique_ptr<core::ast::s_stmt_scoped_body> parse_scoped_statement_bod
     else
         state.pos++;
         
-    return std::make_unique<core::ast::s_stmt_scoped_body>(core::lisel(brace_token.selection, state.now().selection), std::move(statement_list));
+    return state.arena.insert(core::ast::s_stmt_scoped_body(core::lisel(brace_token.selection, state.now().selection), std::move(statement_list)));
 }
 
-static std::unique_ptr<core::ast::stmt_return> parse_stmt_return(parse_state& state) {
+static core::ast::node_id parse_stmt_return(parse_state& state) {
     const core::token& start_token = state.next();
 
-    core::ast::up_expr expression;
+    core::ast::node_id expression;
 
     if (state.now().type == core::token_type::RBRACE)
-        expression = std::make_unique<core::ast::expr_none>(state.now().selection);
+        expression = state.arena.insert(core::ast::expr_none(state.now().selection));
     else
         expression = parse_expression(state);
     
-    return std::make_unique<core::ast::stmt_return>(core::lisel(start_token.selection, expression->selection), std::move(expression));
+    return state.arena.insert(core::ast::stmt_return(core::lisel(start_token.selection, state.arena.get_ptr(expression)->selection), std::move(expression)));
 }
 
-static std::unique_ptr<core::ast::s_stmt_use> parse_s_stmt_use(parse_state& state) {
+static core::ast::node_id parse_s_stmt_use(parse_state& state) {
     const core::token& start_token = state.next();
     const core::token& value_token = state.expect(core::token_type::STRING, "Expected a string.");
 
-    auto value_node = std::make_unique<core::ast::expr_literal>(value_token.selection, core::ast::expr_literal::literal_type::STRING);
+    const core::ast::node_id value_node = state.arena.insert(core::ast::expr_literal(value_token.selection, core::ast::expr_literal::literal_type::STRING));
 
-    return std::make_unique<core::ast::s_stmt_use>(core::lisel(start_token.selection, value_node->selection), std::move(value_node));
+    return state.arena.insert(core::ast::s_stmt_use(core::lisel(start_token.selection, state.arena.get_ptr(value_node)->selection), value_node));
 }
 
-static std::unique_ptr<core::ast::s_stmt_namespace> parse_s_stmt_namespace(parse_state& state) {
+static core::ast::node_id parse_s_stmt_namespace(parse_state& state) {
     const core::token& start_token = state.next();
     const core::token& value_token = state.expect(core::token_type::IDENTIFIER, "Expected an identifier.");
 
-    auto name_node = std::make_unique<core::ast::expr_identifier>(value_token.selection);
-    core::ast::up_s_stmt content = parse_scoped_statement(state);
+    const core::ast::node_id name_node = state.arena.insert(core::ast::expr_identifier(value_token.selection));
+    const core::ast::node_id content = parse_scoped_statement(state);
     
-    return std::make_unique<core::ast::s_stmt_namespace>(core::lisel(start_token.selection, content->selection), std::move(name_node), std::move(content)); 
+    return state.arena.insert(core::ast::s_stmt_namespace(core::lisel(start_token.selection, state.arena.get_ptr(content)->selection), name_node, content));
 }
 
-static std::unique_ptr<core::ast::s_stmt_declaration> parse_s_declaration(parse_state& state) {
+static core::ast::node_id parse_s_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
-    core::ast::up_expr name = parse_scope_resolution(state);
-    core::ast::up_expr type = parse_optional_type(state);
+    core::ast::node_id name = parse_scope_resolution(state);
+    core::ast::node_id type = parse_optional_type(state);
 
-    core::ast::up_expr value;
+    core::ast::node_id value;
 
     switch (state.now().type) {
         case core::token_type::LPAREN:
@@ -538,15 +539,17 @@ static std::unique_ptr<core::ast::s_stmt_declaration> parse_s_declaration(parse_
             value = parse_expression(state);
             break;
         default:
-            value = std::make_unique<core::ast::expr_none>(state.now().selection);
+            value = state.arena.insert(core::ast::expr_none(state.now().selection));
     }
 
-    return std::make_unique<core::ast::s_stmt_declaration>(core::lisel(start_token.selection, state.now().selection), std::move(name), std::move(value), std::move(type));
+    return state.arena.insert(core::ast::s_stmt_declaration(core::lisel(start_token.selection, state.now().selection), std::move(name), std::move(value), std::move(type)));
 }
 
 // Find statements expected in a namespace or a struct.
-static core::ast::up_s_stmt parse_scoped_statement(parse_state& state) {
+static core::ast::node_id parse_scoped_statement(parse_state& state) {
     const core::token& tok = state.now();
+
+    std::cout << "found: " << state.process.sub_source_code(tok.selection) << '\n';
 
     switch (tok.type) {
         case core::token_type::USE: return parse_s_stmt_use(state);
@@ -554,15 +557,15 @@ static core::ast::up_s_stmt parse_scoped_statement(parse_state& state) {
         case core::token_type::DEC: return parse_s_declaration(state);
         case core::token_type::LBRACE: return parse_scoped_statement_body(state);
         default: {
-            core::ast::up_stmt statement = parse_statement(state);
+            const core::ast::node* statement = state.arena.get_ptr(parse_statement(state));
             state.process.add_log(core::lilog::log_level::ERROR, statement->selection, "The given statement can only be used in a function body.");
-            return std::make_unique<core::ast::s_stmt_invalid>(statement->selection);
+            return state.arena.insert(core::ast::s_stmt_invalid(statement->selection));
         }
     }
 }
 
 // Find statements expected in function bodies.
-static core::ast::up_stmt parse_statement(parse_state& state) {
+static core::ast::node_id parse_statement(parse_state& state) {
     const core::token& tok = state.now();
 
     switch (tok.type) {
@@ -570,37 +573,40 @@ static core::ast::up_stmt parse_statement(parse_state& state) {
         case core::token_type::WHILE: return parse_stmt_while(state);
         case core::token_type::LBRACE: return parse_stmt_body(state);
         case core::token_type::RETURN: return parse_stmt_return(state);
-        case core::token_type::BREAK: return std::make_unique<core::ast::stmt_break>(state.next().selection);
-        case core::token_type::CONTINUE: return std::make_unique<core::ast::stmt_continue>(state.next().selection);
+        case core::token_type::BREAK: return state.arena.insert(core::ast::stmt_break(state.next().selection));
+        case core::token_type::CONTINUE: return state.arena.insert(core::ast::stmt_continue(state.next().selection));
 
         // Capture this for 
         case core::token_type::USE: 
         case core::token_type::NAMESPACE: 
             state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "The given statement can not be used in a function body.");
-            return std::make_unique<core::ast::stmt_invalid>(state.next().selection);
+            return state.arena.insert(core::ast::stmt_invalid(state.next().selection));
 
         default: {
-            core::ast::up_expr expression = parse_expression(state);
+            core::ast::node_id expression = parse_expression(state);
             
-            if (!expression->is_wrappable()) {
-                state.process.add_log(core::lilog::log_level::ERROR, expression->selection, "Unexpected expression.");
-                return std::make_unique<core::ast::stmt_invalid>(expression->selection);
-            }
+            // if (!expression->is_wrappable()) {
+            //     state.process.add_log(core::lilog::log_level::ERROR, expression->selection, "Unexpected expression.");
+            //     return std::make_unique<core::ast::stmt_invalid>(expression->selection);
+            // }
             
-            return std::make_unique<core::ast::stmt_wrapper>(std::move(expression));
+            return state.arena.insert(std::move(expression));
         }
     }
 }
 
 bool core::frontend::parse(core::liprocess& process, const core::t_file_id file_id) {
     parse_state state(process, file_id);
-    auto root = core::ast::ast_root();
+    
+    state.arena.insert(core::ast::ast_root());
     
     while (!state.at_eof()) {
-        root.statement_list.emplace_back(parse_scoped_statement(state));
+        auto result = parse_scoped_statement(state);
+
+        state.arena.get_as<core::ast::ast_root>(0).statement_list.push_back(std::move(result));
     }
 
-    state.file.dump_ast_root = std::any(std::make_shared<core::ast::ast_root>(std::move(root)));
+    state.file.dump_ast_arena = std::any(std::move(state.arena));
 
     return true;
 }

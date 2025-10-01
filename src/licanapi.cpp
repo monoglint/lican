@@ -102,11 +102,11 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
             }
         }
 
-        if (process.config._dump_ast && file.dump_ast_root.has_value()) {
+        if (process.config._dump_ast && file.dump_ast_arena.has_value()) {
             std::cout << "AST:\n";
             std::string buffer(0, ' ');
-            auto ast_root_ptr = std::any_cast<std::shared_ptr<core::ast::ast_root>>(file.dump_ast_root);
-            ast_root_ptr->pretty_debug(process, buffer, 0);
+            auto ast_arena = std::any_cast<core::ast::ast_arena>(file.dump_ast_arena);
+            ast_arena.pretty_debug(process, 0, buffer, 0);
             std::cout << buffer << '\n';
         }
     }

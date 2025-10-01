@@ -15,6 +15,7 @@ add_executable(licanc
     src/core.cpp
     src/semantic.cpp
     src/generate.cpp
+    src/ast.cpp
     resources/resources.rc
 )
 
