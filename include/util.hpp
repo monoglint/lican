@@ -1,4 +1,13 @@
-// Misc util that contains helpful functions for all stages of the compiler.
+/*
+
+====================================================
+
+Minor functions are are used in different locations of the compiler.
+
+====================================================
+
+*/
+
 #pragma once
 
 #include <string>

@@ -1,3 +1,16 @@
+/*
+
+====================================================
+
+Lican Lexer
+Written by @monoglint
+
+*TO BE IMPROVED*
+
+====================================================
+
+*/
+
 #include <vector>
 #include <fstream>
 #include <algorithm>
@@ -129,16 +142,16 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 
         if (current_char == ';') {
             state.next();
-            if (state.now() == '*') {
+            if (state.now() == ';') {
                 state.next();
-                while (!state.at_eof() && !(state.now() == '*' && state.peek(1) == ';'))
+                while (!state.at_eof() && !(state.now() == ';' && state.peek(1) == ';'))
                     state.next();
 
                 if (state.at_eof())
                     process.add_log(lilog::log_level::ERROR, state.get_selection(), "Unending multiline comment.");
                 else {
-                    state.next(); // skip '*'
-                    state.next(); // skip '#'
+                    state.next(); // skip ';;'
+                    state.next(); 
                 }
             }
             else {

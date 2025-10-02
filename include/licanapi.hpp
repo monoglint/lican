@@ -1,4 +1,20 @@
-// External api usage of the lican compiler.
+/*
+
+====================================================
+
+External API usage for the compiler.
+The symbols in this file are useful to main.cpp and any project integrating this compiler.
+
+CONTAINS liconfig_init and liconfig
+
+IMPORTANT
+The source file for this header contains the manager for the compilation pipeline.
+All stages of compilation are called there.
+
+====================================================
+
+*/
+
 #pragma once
 
 #include <algorithm>
@@ -36,7 +52,8 @@ namespace licanapi {
             _dump_token_list(contains_flag(init.flag_list, "-t")),
             _dump_ast(contains_flag(init.flag_list, "-a")),
             _dump_logs(contains_flag(init.flag_list, "-l")),
-            _dump_chrono(contains_flag(init.flag_list, "-c")) {}
+            _dump_chrono(contains_flag(init.flag_list, "-c")),
+            _show_cascading_logs(contains_flag(init.flag_list, "-s")) {}
             
         const std::string project_path;
         const std::string output_path;
@@ -48,6 +65,7 @@ namespace licanapi {
         const bool _dump_ast = false;
         const bool _dump_logs = false;
         const bool _dump_chrono = false;
+        const bool _show_cascading_logs = false;
     };
 
     bool build_project(const liconfig_init& config);

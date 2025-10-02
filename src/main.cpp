@@ -1,3 +1,16 @@
+/*
+
+====================================================
+
+Holds command interface operations. Can be replaced by software integrating this compiler.
+
+To edit flag information, go to licanapi.hpp.
+To see where flags are used throughout the compiler, ctrl+shift+f their name.
+
+====================================================
+
+*/
+
 #include <iostream>
 #include <string>
 #include <filesystem>
@@ -139,10 +152,11 @@ bool STRESS(const t_command_data& command) {
 
 bool FLAGS(const t_command_data& command) {
     std::cout << "sorry guys, sorthands only:\n";
-    std::cout << "dump-tokens     -t     Dumps the list of tokens generated during lexing.\n";
-    std::cout << "dump-ast        -a     Dumps the AST generated during parsing.\n";
-    std::cout << "dump-logs       -l     Dumps all logs generated during processing.\n";
-    std::cout << "dump-chrono     -c     Dumps the amount of time it took each stage of the compiler to process.\n";
+    std::cout << "dump-tokens           -t     Dumps the list of tokens generated during lexing.\n";
+    std::cout << "dump-ast              -a     Dumps the AST generated during parsing.\n";
+    std::cout << "dump-logs             -l     Dumps all logs generated during processing.\n";
+    std::cout << "dump-chrono           -c     Dumps the amount of time it took each stage of the compiler to process.\n";
+    std::cout << "show_cascading_logs   -s     If enabled, the compiler will not attempt to hide logs that could have no use to the programmer.\n";
 
     return true;
 }

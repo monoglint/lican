@@ -1,1 +1,1 @@
-module main { use "hello" dec main<T>() { return 5 } }  
+use "std/io"module math {	dec add<T>(a: T, b: T)		return a + b}dec main() {	math::add<u8>(5, 2)}

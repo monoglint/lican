@@ -1,0 +1,37 @@
+Date : 2025-10-01 22:12:04
+Directory : c:\Users\jghig\cxxprojects\licanc
+Total : 9 files,  -80 codes, -2 comments, -87 blanks, all -169 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| CMake    |          1 |          1 |          0 |          0 |          1 |
+| C++      |          8 |        -81 |         -2 |        -87 |       -170 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                 | files      | code       | comment    | blank      | total      |
++------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                    |          9 |        -80 |         -2 |        -87 |       -169 |
+| . (Files)                                            |          1 |          1 |          0 |          0 |          1 |
+| include                                              |          4 |       -210 |          0 |        -60 |       -270 |
+| src                                                  |          4 |        129 |         -2 |        -27 |        100 |
++------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                             | language | code       | comment    | blank      | total      |
++------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\jghig\cxxprojects\licanc\CMakeLists.txt     | CMake    |          1 |          0 |          0 |          1 |
+| c:\Users\jghig\cxxprojects\licanc\include\ast.hpp    | C++      |       -135 |          3 |        -35 |       -167 |
+| c:\Users\jghig\cxxprojects\licanc\include\symbol.hpp | C++      |        -83 |         -3 |        -28 |       -114 |
+| c:\Users\jghig\cxxprojects\licanc\include\token.hpp  | C++      |          1 |          0 |          0 |          1 |
+| c:\Users\jghig\cxxprojects\licanc\include\util.hpp   | C++      |          7 |          0 |          3 |         10 |
+| c:\Users\jghig\cxxprojects\licanc\src\ast.cpp        | C++      |        228 |         15 |         15 |        258 |
+| c:\Users\jghig\cxxprojects\licanc\src\lex.cpp        | C++      |          1 |          0 |          0 |          1 |
+| c:\Users\jghig\cxxprojects\licanc\src\parse.cpp      | C++      |        -14 |         -2 |         -4 |        -20 |
+| c:\Users\jghig\cxxprojects\licanc\src\semantic.cpp   | C++      |        -86 |        -15 |        -38 |       -139 |
+| Total                                                |          |        -80 |         -2 |        -87 |       -169 |
++------------------------------------------------------+----------+------------+------------+------------+------------+

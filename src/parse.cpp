@@ -1,5 +1,7 @@
 /*
 
+====================================================
+
 TERMINOLOGY NOTE
 
 All nodes are refered to as items unless
@@ -9,6 +11,13 @@ All nodes are refered to as items unless
 Expression nodes can stand independent in an item or statement wrapper if certain conditions are met (check ast.cpp/is_expression_wrappable)
 
 Statement nodes are items that can only exist in function bodies.
+
+====================================================
+
+Inside of the parser, always invoke logs using state.log_and_pause errors if you want every other error
+in the given statement to be ignored. This can help prevent cascading problems.
+
+====================================================
 
 */
 
@@ -22,64 +31,64 @@ Statement nodes are items that can only exist in function bodies.
 struct parse_state;
 
 using t_p_expression_function = core::ast::t_node_id(*)(parse_state& state);
-using t_operator_set = std::unordered_set<core::token_type>;
+using t_token_set = std::unordered_set<core::token_type>;
 
-static const t_operator_set set_scope_resolution = {
+static const t_token_set set_binary_scope_resolution = {
     core::token_type::DOUBLE_COLON
 };
 
-static const t_operator_set set_member_access = {
+static const t_token_set set_binary_member_access = {
     core::token_type::DOT
 };
 
-static const t_operator_set set_unary_post = {
+static const t_token_set set_unary_post = {
     core::token_type::DOUBLE_PLUS,
     core::token_type::DOUBLE_MINUS
 };
 
-static const t_operator_set set_unary_pre = {
+static const t_token_set set_unary_pre = {
     core::token_type::MINUS,
     core::token_type::BANG,
     core::token_type::DOUBLE_PLUS,
     core::token_type::DOUBLE_MINUS
 };
 
-static const t_operator_set set_exponential = {
+static const t_token_set set_binary_exponential = {
     core::token_type::CARET
 };
 
-static const t_operator_set set_multiplicative = {
+static const t_token_set set_binary_multiplicative = {
     core::token_type::ASTERISK,
     core::token_type::SLASH,
     core::token_type::PERCENT
 };
 
-static const t_operator_set set_additive = {
+static const t_token_set set_binary_additive = {
     core::token_type::PLUS,
     core::token_type::MINUS
 };
 
-static const t_operator_set set_numeric_comparison = {
+static const t_token_set set_binary_numeric_comparison = {
     core::token_type::LARROW,
     core::token_type::LESS_EQUAL,
     core::token_type::RARROW,
     core::token_type::GREATER_EQUAL
 };
 
-static const t_operator_set set_direct_comparison = {
+static const t_token_set set_binary_direct_comparison = {
     core::token_type::DOUBLE_EQUAL,
     core::token_type::BANG_EQUAL
 };
 
-static const t_operator_set set_and = {
+static const t_token_set set_binary_and = {
     core::token_type::DOUBLE_AMPERSAND
 };
 
-static const t_operator_set set_or = {
+static const t_token_set set_binary_or = {
     core::token_type::DOUBLE_PIPE
 };
 
-static const t_operator_set set_assignment = {
+static const t_token_set set_binary_assignment = {
     core::token_type::EQUAL,
     core::token_type::PLUS_EQUAL,
     core::token_type::MINUS_EQUAL,
@@ -87,6 +96,20 @@ static const t_operator_set set_assignment = {
     core::token_type::SLASH_EQUAL,
     core::token_type::PERCENT_EQUAL,
     core::token_type::CARET_EQUAL
+};
+
+// Used by the error handler - Eats tokens all the way to the next statement.
+static const t_token_set set_statement_starters = {
+    core::token_type::IF,
+    core::token_type::WHILE,
+    core::token_type::LBRACE,
+    core::token_type::RETURN,
+    core::token_type::TYPEDEC,
+    core::token_type::BREAK,
+    core::token_type::CONTINUE,
+    core::token_type::USE,
+    core::token_type::MODULE,
+    core::token_type::DEC,
 };
 
 struct parse_state {
@@ -103,6 +126,9 @@ struct parse_state {
     core::ast::ast_arena arena;
 
     core::t_pos pos = 0;
+
+    // When true, all logs will be set as cascaded. They still get sent to the core, but with lower priority.
+    bool f_pause_errors = false;
 
     inline const core::token& now() const {
         return token_list.at(pos);
@@ -134,11 +160,21 @@ struct parse_state {
     inline const core::token& expect(const core::token_type type, const std::string& error_message = "[No Info]") {
         const core::token& now = next();
         if (now.type != type)
-            process.add_log(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
+            log_and_pause_errors(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
         
         // We expect to return an incorrect token.
         // Since the parser handles tokens by reference, it is not a good idea to make new temporary ones.
         return now;
+    }
+
+    inline void log_and_pause_errors(const core::lilog::log_level log_level, const core::lisel& selection, const std::string& message) {
+        if (f_pause_errors)
+            return;
+
+        process.add_log(log_level, selection, message);
+
+        if (!process.config._show_cascading_logs)
+            f_pause_errors = true;        
     }
 };
 
@@ -150,6 +186,7 @@ static core::ast::t_node_id parse_item(parse_state& state);
 static core::ast::t_node_id parse_variant_declaration(parse_state& state, const bool local_declaration);
 
 static core::ast::t_node_id parse_expr_type(parse_state& state);
+
 template <typename T_NODE, typename PARSE_FUNC>
 static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func);
 
@@ -162,7 +199,7 @@ static core::ast::t_node_id parse_optional_type(parse_state& state) {
     return state.arena.insert(core::ast::expr_none(state.now().selection));
 }
 
-static core::ast::t_node_id binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
+static core::ast::t_node_id binary_expression_left_associative(parse_state& state, const t_p_expression_function& lower, const t_token_set& set) {
     core::ast::t_node_id left = lower(state);
 
     while (!state.at_eof() && set.find(state.now().type) != set.end()) {
@@ -180,7 +217,7 @@ static core::ast::t_node_id binary_expression_left_associative(parse_state& stat
     return left;
 }
 
-static core::ast::t_node_id binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_operator_set& set) {
+static core::ast::t_node_id binary_expression_right_associative(parse_state& state, const t_p_expression_function& lower, const t_token_set& set) {
     core::ast::t_node_id left = lower(state);
 
     if (!state.at_eof() && set.find(state.now().type) != set.end()) {
@@ -205,7 +242,7 @@ template <typename FUNC>
 static core::ast::t_node_list parse_list(parse_state& state, FUNC func, const bool is_optional, const core::token_type left_opr, const core::token_type right_opr) {
     if (state.now().type != left_opr)
         if (is_optional) return {};
-        else state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Expected an opening bracket.");
+        else state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Expected an opening delimiter.");
 
     if (state.peek(1).type == right_opr) {
         state.pos += 2;
@@ -219,7 +256,7 @@ static core::ast::t_node_list parse_list(parse_state& state, FUNC func, const bo
         list.push_back(func(state));
     } while (!state.at_eof() && state.now().type == core::token_type::COMMA);
 
-    state.expect(right_opr, "Expected a closing bracket.");
+    state.expect(right_opr, "Expected a closing delimiter.");
 
     return list;
 }
@@ -299,17 +336,17 @@ static core::ast::t_node_id parse_primary_expression(parse_state& state) {
             break;
     }
 
-    state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Unexpected token.");
+    state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Unexpected token.");
 
     return state.arena.insert(core::ast::expr_invalid(state.next().selection));
 }
 
 static core::ast::t_node_id parse_scope_resolution(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_primary_expression, set_scope_resolution);
+    return binary_expression_left_associative(state, &parse_primary_expression, set_binary_scope_resolution);
 }
 
 static core::ast::t_node_id parse_member_access(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_scope_resolution, set_member_access);
+    return binary_expression_left_associative(state, &parse_scope_resolution, set_binary_member_access);
 }
 
 static core::ast::t_node_id parse_expr_call(parse_state& state) {
@@ -318,7 +355,7 @@ static core::ast::t_node_id parse_expr_call(parse_state& state) {
     if (state.now().type != core::token_type::LPAREN && state.now().type != core::token_type::LARROW)
         return expression;
 
-    core::ast::t_node_list type_argument_list = parse_list(state, parse_expr_type, false, core::token_type::LARROW, core::token_type::RARROW);
+    core::ast::t_node_list type_argument_list = parse_list(state, parse_expr_type, true, core::token_type::LARROW, core::token_type::RARROW);
     core::ast::t_node_list argument_list = parse_list(state, parse_expression, false, core::token_type::LPAREN, core::token_type::RPAREN);
 
     return state.arena.insert(core::ast::expr_call(core::lisel(state.arena.get_base_ptr(expression)->selection, state.now().selection), expression, std::move(type_argument_list), std::move(argument_list)));
@@ -344,31 +381,31 @@ static core::ast::t_node_id parse_expr_unary(parse_state& state) {
 }
 
 static core::ast::t_node_id parse_exponential(parse_state& state) {
-    return binary_expression_right_associative(state, &parse_expr_unary, set_exponential);
+    return binary_expression_right_associative(state, &parse_expr_unary, set_binary_exponential);
 }
 
 static core::ast::t_node_id parse_multiplicative(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_exponential, set_multiplicative);
+    return binary_expression_left_associative(state, &parse_exponential, set_binary_multiplicative);
 }
 
 static core::ast::t_node_id parse_additive(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_multiplicative, set_additive);
+    return binary_expression_left_associative(state, &parse_multiplicative, set_binary_additive);
 }
 
 static core::ast::t_node_id parse_numeric_comparison(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_additive, set_numeric_comparison);
+    return binary_expression_left_associative(state, &parse_additive, set_binary_numeric_comparison);
 }
 
 static core::ast::t_node_id parse_direct_comparison(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_numeric_comparison, set_direct_comparison);
+    return binary_expression_left_associative(state, &parse_numeric_comparison, set_binary_direct_comparison);
 }
 
 static core::ast::t_node_id parse_and(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_direct_comparison, set_and);
+    return binary_expression_left_associative(state, &parse_direct_comparison, set_binary_and);
 }
 
 static core::ast::t_node_id parse_or(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_and, set_or);
+    return binary_expression_left_associative(state, &parse_and, set_binary_or);
 }
 
 static core::ast::t_node_id parse_expr_ternary(parse_state& state) {
@@ -385,7 +422,7 @@ static core::ast::t_node_id parse_expr_ternary(parse_state& state) {
 }
 
 static core::ast::t_node_id parse_assignment(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_expr_ternary, set_assignment);
+    return binary_expression_left_associative(state, &parse_expr_ternary, set_binary_assignment);
 }
 
 // Entry point to pratt parser design
@@ -436,7 +473,7 @@ static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& pars
     }
 
     if (state.at_eof())
-        state.process.add_log(core::lilog::log_level::ERROR, state.now().selection, "Expected '}', got EOF.");
+        state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Expected '}', got EOF.");
     else
         state.pos++;
         
@@ -491,7 +528,7 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
                 break;
             }
             value = state.arena.insert(core::ast::expr_invalid(state.now().selection));
-            state.process.add_log(core::lilog::log_level::ERROR, state.next().selection, "Functions can not be declared in function bodies. Declare a closure instead.");
+            state.log_and_pause_errors(core::lilog::log_level::ERROR, state.next().selection, "Functions can not be declared in function bodies. Declare a closure instead.");
             value = state.arena.insert(core::ast::expr_invalid(state.now().selection));
             break;
         case core::token_type::EQUAL:
@@ -520,6 +557,8 @@ static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
 
 // Find statements expected in a module or a struct.
 static core::ast::t_node_id parse_item(parse_state& state) {
+    state.f_pause_errors = false;
+
     const core::token& tok = state.now();
 
     switch (tok.type) {
@@ -530,7 +569,7 @@ static core::ast::t_node_id parse_item(parse_state& state) {
         case core::token_type::LBRACE: return parse_item_body<core::ast::item_body>(state, parse_item);
         default: {
             const core::ast::node* statement = state.arena.get_base_ptr(parse_statement(state));
-            state.process.add_log(core::lilog::log_level::ERROR, statement->selection, "The given item can only be used in a function body.");
+            state.log_and_pause_errors(core::lilog::log_level::ERROR, statement->selection, "The given item can only be used in a function body.");
             return state.arena.insert(core::ast::item_invalid(statement->selection));
         }
     }
@@ -538,6 +577,8 @@ static core::ast::t_node_id parse_item(parse_state& state) {
 
 // Find statements expected in function bodies.
 static core::ast::t_node_id parse_statement(parse_state& state) {
+    state.f_pause_errors = false;
+
     const core::token& tok = state.now();
 
     switch (tok.type) {
@@ -552,7 +593,7 @@ static core::ast::t_node_id parse_statement(parse_state& state) {
         // Capture this for 
         case core::token_type::USE: 
         case core::token_type::MODULE: 
-            state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "The given item can not be used in a function body.");
+            state.log_and_pause_errors(core::lilog::log_level::ERROR, tok.selection, "The given item can not be used in a function body.");
             return state.arena.insert(core::ast::stmt_invalid(state.next().selection));
 
         default: {
@@ -560,7 +601,7 @@ static core::ast::t_node_id parse_statement(parse_state& state) {
             
             if (!state.arena.is_expression_wrappable(expr_id)) {
                 const core::ast::node* as_node = state.arena.get_base_ptr(expr_id);
-                state.process.add_log(core::lilog::log_level::ERROR, as_node->selection, "Unexpected expression.");
+                state.log_and_pause_errors(core::lilog::log_level::ERROR, as_node->selection, "Unexpected expression.");
                 return state.arena.insert(core::ast::stmt_invalid(as_node->selection));
             }
             

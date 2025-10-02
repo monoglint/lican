@@ -1,6 +1,15 @@
-// Contains all of the needed structures and data for the internal functionalities of the compiler.
-// Used by all stages of the compiler.
-// Holds the declarations for all of the stages of the compiler.
+/*
+
+====================================================
+
+Contains all of the needed structures and data for the internal functionalities of the compiler.
+Used by all stages of the compiler.
+Holds the declarations for all of the stages of the compiler.
+
+====================================================
+
+*/
+
 #pragma once
 
 #include <cstdint>

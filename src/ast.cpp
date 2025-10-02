@@ -16,6 +16,9 @@ bool core::ast::ast_arena::is_expression_wrappable(const t_node_id id) {
     return false;
 }
 
+// Transparency note:
+// Individual cases in this function were initially written to be functions in each ast node.
+// Copilot was used to transfer the contents of those functions into one giant one for the arena struct.
 void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_id id, std::string& buffer, uint8_t indent) {
     const arena_node& an = node_list[id];
     const node* base = get_base_ptr(id);

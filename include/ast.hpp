@@ -1,4 +1,13 @@
-// Contains all of the AST node declarations. Used by the frontend and read by the backend.
+/*
+
+====================================================
+
+Contains all of the AST node declarations. Used by the frontend and read by the backend.
+
+====================================================
+
+*/
+
 #pragma once
 
 #include <cstdint>
