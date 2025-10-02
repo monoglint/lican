@@ -29,8 +29,8 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
         case node_type::ROOT: {
             const auto& v = std::get<ast_root>(an._raw);
             buffer += liutil::indent_repeat(indent) + "lican/ast_root : node\n";
-            buffer += liutil::indent_repeat(indent+1) + "s_statements:\n";
-            for (const t_node_id& sid : v.s_statement_list) pretty_debug(process, sid, buffer, indent+2);
+            buffer += liutil::indent_repeat(indent+1) + "items:\n";
+            for (const t_node_id& sid : v.item_list) pretty_debug(process, sid, buffer, indent+2);
             break;
         }
         case node_type::EXPR_NONE: {
@@ -172,11 +172,11 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             pretty_debug(process, v.expression, buffer, indent+1);
             break;
         }
-        case node_type::STMT_BODY: {
-            const auto& v = std::get<stmt_body>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "stmt_body\n";
-            buffer += liutil::indent_repeat(indent+1) + "statements:\n";
-            for (const t_node_id& s : v.statement_list) pretty_debug(process, s, buffer, indent+2);
+        case node_type::ITEM_BODY: {
+            const auto& v = std::get<item_body>(an._raw);
+            buffer += liutil::indent_repeat(indent) + "item_body\n";
+            buffer += liutil::indent_repeat(indent+1) + "items:\n";
+            for (const t_node_id& s : v.item_list) pretty_debug(process, s, buffer, indent+2);
             break;
         }
         case node_type::STMT_BREAK: {
@@ -187,23 +187,16 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent) + "stmt_continue\n";
             break;
         }
-        case node_type::S_STMT_USE: {
-            const auto& v = std::get<s_stmt_use>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "s_stmt_use\n";
+        case node_type::ITEM_USE: {
+            const auto& v = std::get<item_use>(an._raw);
+            buffer += liutil::indent_repeat(indent) + "item_use\n";
             buffer += liutil::indent_repeat(indent+1) + "path:\n";
             pretty_debug(process, v.path, buffer, indent+2);
             break;
         }
-        case node_type::S_STMT_SCOPED_BODY: {
-            const auto& v = std::get<s_stmt_scoped_body>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "stmt_scoped_body\n";
-            buffer += liutil::indent_repeat(indent+1) + "scoped statements:\n";
-            for (const t_node_id& s : v.statement_list) pretty_debug(process, s, buffer, indent+2);
-            break;
-        }
-        case node_type::S_STMT_MODULE: {
-            const auto& v = std::get<s_stmt_module>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "s_stmt_module\n";
+        case node_type::ITEM_MODULE: {
+            const auto& v = std::get<item_module>(an._raw);
+            buffer += liutil::indent_repeat(indent) + "item_module\n";
             buffer += liutil::indent_repeat(indent+1) + "name:\n";
             pretty_debug(process, v.name, buffer, indent+2);
             buffer += liutil::indent_repeat(indent+1) + "content:\n";
@@ -221,9 +214,9 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             pretty_debug(process, v.value, buffer, indent+2);
             break;
         }
-        case node_type::STMT_TYPE_DECLARATION: {
-            const auto& v = std::get<stmt_type_declaration>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "stmt_type_declaration\n";
+        case node_type::ITEM_TYPE_DECLARATION: {
+            const auto& v = std::get<item_type_declaration>(an._raw);
+            buffer += liutil::indent_repeat(indent) + "item_type_declaration\n";
             buffer += liutil::indent_repeat(indent+1) + "name:\n";
             pretty_debug(process, v.name, buffer, indent+2);
 
@@ -235,8 +228,8 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
 
             break;
         }
-        case node_type::S_STMT_INVALID: {
-            buffer += liutil::indent_repeat(indent) + "s_stmt_invalid\n";
+        case node_type::ITEM_INVALID: {
+            buffer += liutil::indent_repeat(indent) + "item_invalid\n";
             break;
         }
         default: {

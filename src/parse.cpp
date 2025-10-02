@@ -2,15 +2,13 @@
 
 TERMINOLOGY NOTE
 
-A scoped statement is named in regards to a semantic scope. This means that a scoped statement is:
-    - struct declaration
-    - file inclusion
-    - namespace declaration
+All nodes are refered to as items unless
+    - It is an expression that can not stand independently by design
+    - It is only usable within function bodies
 
-A scoped statement is NOT any of the following:
-    - if
-    - while
-    - closure declaration
+Expression nodes can stand independent in an item or statement wrapper if certain conditions are met (check ast.cpp/is_expression_wrappable)
+
+Statement nodes are items that can only exist in function bodies.
 
 */
 
@@ -148,12 +146,12 @@ struct parse_state {
 static core::ast::t_node_id parse_expression(parse_state& state);
 static core::ast::t_node_id parse_scope_resolution(parse_state& state);
 static core::ast::t_node_id parse_statement(parse_state& state);
-static core::ast::t_node_id parse_scoped_statement(parse_state& state);
+static core::ast::t_node_id parse_item(parse_state& state);
 static core::ast::t_node_id parse_variant_declaration(parse_state& state, const bool local_declaration);
 
 static core::ast::t_node_id parse_expr_type(parse_state& state);
 template <typename T_NODE, typename PARSE_FUNC>
-static core::ast::t_node_id parse_stmt_body(parse_state& state, PARSE_FUNC& parse_func);
+static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func);
 
 static core::ast::t_node_id parse_optional_type(parse_state& state) {
     if (state.now().type == core::token_type::COLON) {
@@ -429,12 +427,12 @@ static core::ast::t_node_id parse_stmt_while(parse_state& state) {
 }
 
 template <typename T_NODE, typename PARSE_FUNC>
-static core::ast::t_node_id parse_stmt_body(parse_state& state, PARSE_FUNC& parse_func) {
+static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func) {
     const core::token& brace_token = state.next();
-    core::ast::t_node_list statement_list;
+    core::ast::t_node_list item_list;
 
     while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
-        statement_list.push_back(parse_func(state));
+        item_list.push_back(parse_func(state));
     }
 
     if (state.at_eof())
@@ -442,7 +440,7 @@ static core::ast::t_node_id parse_stmt_body(parse_state& state, PARSE_FUNC& pars
     else
         state.pos++;
         
-    return state.arena.insert(T_NODE(core::lisel(brace_token.selection, state.now().selection), std::move(statement_list)));
+    return state.arena.insert(T_NODE(core::lisel(brace_token.selection, state.now().selection), std::move(item_list)));
 }
 
 static core::ast::t_node_id parse_stmt_return(parse_state& state) {
@@ -458,23 +456,23 @@ static core::ast::t_node_id parse_stmt_return(parse_state& state) {
     return state.arena.insert(core::ast::stmt_return(core::lisel(start_token.selection, state.arena.get_base_ptr(expression)->selection), expression));
 }
 
-static core::ast::t_node_id parse_s_stmt_use(parse_state& state) {
+static core::ast::t_node_id parse_item_use(parse_state& state) {
     const core::token& start_token = state.next();
     const core::token& value_token = state.expect(core::token_type::STRING, "Expected a string.");
 
     const core::ast::t_node_id value_node = state.arena.insert(core::ast::expr_literal(value_token.selection, core::ast::expr_literal::literal_type::STRING));
 
-    return state.arena.insert(core::ast::s_stmt_use(core::lisel(start_token.selection, state.arena.get_base_ptr(value_node)->selection), value_node));
+    return state.arena.insert(core::ast::item_use(core::lisel(start_token.selection, state.arena.get_base_ptr(value_node)->selection), value_node));
 }
 
-static core::ast::t_node_id parse_s_stmt_module(parse_state& state) {
+static core::ast::t_node_id parse_item_module(parse_state& state) {
     const core::token& start_token = state.next();
     const core::token& value_token = state.expect(core::token_type::IDENTIFIER, "Expected an identifier.");
 
     const core::ast::t_node_id name_node = state.arena.insert(core::ast::expr_identifier(value_token.selection));
-    const core::ast::t_node_id content = parse_scoped_statement(state);
+    const core::ast::t_node_id content = parse_item(state);
     
-    return state.arena.insert(core::ast::s_stmt_module(core::lisel(start_token.selection, state.arena.get_base_ptr(content)->selection), name_node, content));
+    return state.arena.insert(core::ast::item_module(core::lisel(start_token.selection, state.arena.get_base_ptr(content)->selection), name_node, content));
 }
 
 static core::ast::t_node_id parse_variant_declaration(parse_state& state, const bool local_declaration) {
@@ -507,7 +505,7 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
     return state.arena.insert(core::ast::variant_declaration(core::lisel(start_token.selection, state.now().selection), name, value, type));
 }
 
-static core::ast::t_node_id parse_s_type_declaration(parse_state& state) {
+static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
     const core::ast::t_node_id name = parse_scope_resolution(state);
@@ -517,23 +515,23 @@ static core::ast::t_node_id parse_s_type_declaration(parse_state& state) {
 
     const core::ast::t_node_id value = parse_expr_type(state);
 
-    return state.arena.insert(core::ast::stmt_type_declaration(core::lisel(start_token.selection, state.now().selection), name, value, std::move(parameter_list)));
+    return state.arena.insert(core::ast::item_type_declaration(core::lisel(start_token.selection, state.now().selection), name, value, std::move(parameter_list)));
 }
 
 // Find statements expected in a module or a struct.
-static core::ast::t_node_id parse_scoped_statement(parse_state& state) {
+static core::ast::t_node_id parse_item(parse_state& state) {
     const core::token& tok = state.now();
 
     switch (tok.type) {
-        case core::token_type::USE: return parse_s_stmt_use(state);
-        case core::token_type::MODULE: return parse_s_stmt_module(state);
+        case core::token_type::USE: return parse_item_use(state);
+        case core::token_type::MODULE: return parse_item_module(state);
         case core::token_type::DEC: return parse_variant_declaration(state, false);
-        case core::token_type::TYPEDEC: return parse_s_type_declaration(state);
-        case core::token_type::LBRACE: return parse_stmt_body<core::ast::s_stmt_scoped_body>(state, parse_scoped_statement);
+        case core::token_type::TYPEDEC: return parse_item_type_declaration(state);
+        case core::token_type::LBRACE: return parse_item_body<core::ast::item_body>(state, parse_item);
         default: {
             const core::ast::node* statement = state.arena.get_base_ptr(parse_statement(state));
-            state.process.add_log(core::lilog::log_level::ERROR, statement->selection, "The given statement can only be used in a function body.");
-            return state.arena.insert(core::ast::s_stmt_invalid(statement->selection));
+            state.process.add_log(core::lilog::log_level::ERROR, statement->selection, "The given item can only be used in a function body.");
+            return state.arena.insert(core::ast::item_invalid(statement->selection));
         }
     }
 }
@@ -545,16 +543,16 @@ static core::ast::t_node_id parse_statement(parse_state& state) {
     switch (tok.type) {
         case core::token_type::IF: return parse_stmt_if(state);
         case core::token_type::WHILE: return parse_stmt_while(state);
-        case core::token_type::LBRACE: return parse_stmt_body<core::ast::stmt_body>(state, parse_statement);
+        case core::token_type::LBRACE: return parse_item_body<core::ast::item_body>(state, parse_statement);
         case core::token_type::RETURN: return parse_stmt_return(state);
-        case core::token_type::TYPEDEC: return parse_s_type_declaration(state);
+        case core::token_type::TYPEDEC: return parse_item_type_declaration(state);
         case core::token_type::BREAK: return state.arena.insert(core::ast::stmt_break(state.next().selection));
         case core::token_type::CONTINUE: return state.arena.insert(core::ast::stmt_continue(state.next().selection));
 
         // Capture this for 
         case core::token_type::USE: 
         case core::token_type::MODULE: 
-            state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "The given statement can not be used in a function body.");
+            state.process.add_log(core::lilog::log_level::ERROR, tok.selection, "The given item can not be used in a function body.");
             return state.arena.insert(core::ast::stmt_invalid(state.next().selection));
 
         default: {
@@ -577,9 +575,9 @@ bool core::frontend::parse(core::liprocess& process, const core::t_file_id file_
     state.arena.insert(core::ast::ast_root());
     
     while (!state.at_eof()) {
-        auto result = parse_scoped_statement(state);
+        auto result = parse_item(state);
 
-        state.arena.get_as<core::ast::ast_root>(0).s_statement_list.push_back(std::move(result));
+        state.arena.get_as<core::ast::ast_root>(0).item_list.push_back(std::move(result));
     }
 
     state.file.dump_ast_arena = std::any(std::move(state.arena));

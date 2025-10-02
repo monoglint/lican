@@ -1,1 +1,1 @@
-typedec my_type<T> = int<T>
+module main { use "hello" dec main<T>() { return 5 } }  

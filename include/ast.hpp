@@ -35,16 +35,15 @@ namespace core {
             STMT_WHILE,
             STMT_RETURN,
             STMT_WRAPPER,
-            STMT_BODY,
+            ITEM_BODY,
             STMT_BREAK,
             STMT_CONTINUE,
 
-            S_STMT_USE,
-            S_STMT_SCOPED_BODY,
-            S_STMT_MODULE,
+            ITEM_USE,
+            ITEM_MODULE,
             VARIANT_DECLARATION,
-            STMT_TYPE_DECLARATION,
-            S_STMT_INVALID,
+            ITEM_TYPE_DECLARATION,
+            ITEM_INVALID,
         };
 
         using t_node_id = size_t;
@@ -67,7 +66,7 @@ namespace core {
             ast_root()
                 : node(core::lisel(0, 0), node_type::ROOT) {}
 
-            t_node_list s_statement_list;
+            t_node_list item_list;
         };
 
         struct expr_none : node {
@@ -208,11 +207,11 @@ namespace core {
             t_node_id expression;
         };
 
-        struct stmt_body : node {
-            stmt_body(const core::lisel& selection, t_node_list&& statement_list)
-                : node(selection, node_type::STMT_BODY), statement_list(std::move(statement_list)) {}
+        struct item_body : node {
+            item_body(const core::lisel& selection, t_node_list&& item_list)
+                : node(selection, node_type::ITEM_BODY), item_list(std::move(item_list)) {}
 
-            t_node_list statement_list;
+            t_node_list item_list;
         };
 
         struct stmt_break : node {
@@ -225,24 +224,17 @@ namespace core {
                 : node(selection, node_type::STMT_CONTINUE) {}
         };
 
-        struct s_stmt_use : node {
-            s_stmt_use(const core::lisel& selection, t_node_id path)
-                : node(selection, node_type::S_STMT_USE), path(path) {}
+        struct item_use : node {
+            item_use(const core::lisel& selection, t_node_id path)
+                : node(selection, node_type::ITEM_USE), path(path) {}
 
             // The parser must ensure that this literal is a string. Store as t_node_id into arena.
             t_node_id path;
         };
 
-        struct s_stmt_scoped_body : node {
-            s_stmt_scoped_body(const core::lisel& selection, t_node_list&& statement_list)
-                : node(selection, node_type::S_STMT_SCOPED_BODY), statement_list(std::move(statement_list)) {}
-
-            t_node_list statement_list;
-        };
-
-        struct s_stmt_module : node {
-            s_stmt_module(const core::lisel& selection, t_node_id name, t_node_id content)
-                : node(selection, node_type::S_STMT_MODULE), name(name), content(content) {}
+        struct item_module : node {
+            item_module(const core::lisel& selection, t_node_id name, t_node_id content)
+                : node(selection, node_type::ITEM_MODULE), name(name), content(content) {}
 
             t_node_id name;
             t_node_id content;
@@ -257,18 +249,18 @@ namespace core {
             t_node_id type;
         };
 
-        struct stmt_type_declaration : node {
-            stmt_type_declaration(const core::lisel& selection, t_node_id name, t_node_id type, t_node_list&& parameter_list)
-                : node(selection, node_type::STMT_TYPE_DECLARATION), name(name), type(type), parameter_list(std::move(parameter_list)) {}
+        struct item_type_declaration : node {
+            item_type_declaration(const core::lisel& selection, t_node_id name, t_node_id type, t_node_list&& parameter_list)
+                : node(selection, node_type::ITEM_TYPE_DECLARATION), name(name), type(type), parameter_list(std::move(parameter_list)) {}
             
             t_node_id name;
             t_node_id type;
             t_node_list parameter_list; // typedec resizable_with_array_with_t<T> = resizable<array<T>>
         };
 
-        struct s_stmt_invalid : node {
-            s_stmt_invalid(const core::lisel& selection)
-                : node(selection, node_type::S_STMT_INVALID) {}
+        struct item_invalid : node {
+            item_invalid(const core::lisel& selection)
+                : node(selection, node_type::ITEM_INVALID) {}
         };
 
         struct arena_node {
@@ -297,16 +289,15 @@ namespace core {
                 stmt_while,
                 stmt_return,
                 stmt_wrapper,
-                stmt_body,
+                item_body,
                 stmt_break,
                 stmt_continue,
 
-                s_stmt_use,
-                s_stmt_scoped_body,
-                s_stmt_module,
+                item_use,
+                item_module,
                 variant_declaration,
-                stmt_type_declaration,
-                s_stmt_invalid
+                item_type_declaration,
+                item_invalid
             > _raw;
         };
 
