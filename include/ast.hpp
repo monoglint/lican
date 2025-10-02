@@ -26,8 +26,6 @@ namespace core {
             EXPR_PARAMETER,
             EXPR_FUNCTION,
             EXPR_CLOSURE,
-            
-            EXPR_LOCAL_DECLARATION,
 
             EXPR_CALL,
 
@@ -43,12 +41,14 @@ namespace core {
 
             S_STMT_USE,
             S_STMT_SCOPED_BODY,
-            S_STMT_NAMESPACE,
-            S_STMT_DECLARATION,
+            S_STMT_MODULE,
+            VARIANT_DECLARATION,
+            STMT_TYPE_DECLARATION,
             S_STMT_INVALID,
         };
 
-        using node_id = size_t;
+        using t_node_id = size_t;
+        using t_node_list = std::vector<t_node_id>;
         struct ast_arena;
         
         struct node {
@@ -67,7 +67,7 @@ namespace core {
             ast_root()
                 : node(core::lisel(0, 0), node_type::ROOT) {}
 
-            std::vector<node_id> statement_list;
+            t_node_list s_statement_list;
         };
 
         struct expr_none : node {
@@ -81,14 +81,14 @@ namespace core {
         };
 
         struct expr_type : node {
-            expr_type(const core::lisel& selection, const node_id source, std::vector<node_id>&& argument_list, const bool is_mutable, const bool is_reference)
-                : node(selection, node_type::EXPR_TYPE), source(source), argument_list(std::move(argument_list)), is_mutable(is_mutable), is_reference(is_reference) {}
+            expr_type(const core::lisel& selection, const t_node_id source, t_node_list&& argument_list, const bool is_mutable, const bool is_pointer)
+                : node(selection, node_type::EXPR_TYPE), source(source), argument_list(std::move(argument_list)), is_mutable(is_mutable), is_pointer(is_pointer) {}
             
-            node_id source; // Identifier or scope resolution
-            std::vector<node_id> argument_list;
+            t_node_id source; // Identifier or scope resolution
+            t_node_list argument_list;
             
             bool is_mutable;
-            bool is_reference;
+            bool is_pointer;
         };
 
         struct expr_identifier : node {
@@ -112,65 +112,58 @@ namespace core {
         };
 
         struct expr_unary : node {
-            expr_unary(const core::lisel& selection, node_id operand, const core::token& opr, const bool post)
+            expr_unary(const core::lisel& selection, t_node_id operand, const core::token& opr, const bool post)
                 : node(selection, node_type::EXPR_UNARY), operand(operand), opr(opr), post(post) {}
 
-            node_id operand;
+            t_node_id operand;
             core::token opr;
             bool post;
         };
 
         struct expr_binary : node {
-            expr_binary(const core::lisel& selection, node_id first, node_id second, const core::token& opr)
+            expr_binary(const core::lisel& selection, t_node_id first, t_node_id second, const core::token& opr)
                 : node(selection, node_type::EXPR_BINARY), first(first), second(second), opr(opr) {}
 
-            node_id first;
-            node_id second;
+            t_node_id first;
+            t_node_id second;
             core::token opr;
         };
         
         struct expr_ternary : node {
-            expr_ternary(const core::lisel& selection, node_id first, node_id second, node_id third)
+            expr_ternary(const core::lisel& selection, t_node_id first, t_node_id second, t_node_id third)
                 : node(selection, node_type::EXPR_TERNARY), first(first), second(second), third(third) {}
 
-            node_id first;
-            node_id second;
-            node_id third;
+            t_node_id first;
+            t_node_id second;
+            t_node_id third;
         };
         
         struct expr_parameter : node {
-            expr_parameter(const core::lisel& selection, node_id name, node_id default_value, node_id type)
+            expr_parameter(const core::lisel& selection, t_node_id name, t_node_id default_value, t_node_id type)
                 : node(selection, node_type::EXPR_PARAMETER), name(name), default_value(default_value), type(type) {}
 
-            node_id name;
-            node_id default_value;
-            node_id type;
+            t_node_id name;
+            t_node_id default_value;
+            t_node_id type;
         };
 
         struct expr_function : node {
-            expr_function(const core::lisel& selection, std::vector<node_id>&& parameter_list, node_id body, node_id return_type)
-                : node(selection, node_type::EXPR_FUNCTION), parameter_list(std::move(parameter_list)), body(body), return_type(return_type) {}
+            expr_function(const core::lisel& selection, t_node_list&& type_parameter_list, t_node_list&& parameter_list, t_node_id body, t_node_id return_type)
+                : node(selection, node_type::EXPR_FUNCTION), type_parameter_list(std::move(type_parameter_list)), parameter_list(std::move(parameter_list)), body(body), return_type(return_type) {}
 
-            std::vector<node_id> parameter_list;
-            node_id body;
-            node_id return_type;
+            t_node_list type_parameter_list;
+            t_node_list parameter_list;
+            t_node_id body;
+            t_node_id return_type;
         };
 
         struct expr_call : node {
-            expr_call(const core::lisel& selection, node_id callee, std::vector<node_id>&& argument_list)
-                : node(selection, node_type::EXPR_CALL), callee(callee), argument_list(std::move(argument_list)) {}
+            expr_call(const core::lisel& selection, t_node_id callee, t_node_list&& type_argument_list, t_node_list&& argument_list)
+                : node(selection, node_type::EXPR_CALL), callee(callee), type_argument_list(std::move(type_argument_list)), argument_list(std::move(argument_list)) {}
 
-            node_id callee;
-            std::vector<node_id> argument_list;
-        };
-
-        struct expr_local_declaration : node {
-            expr_local_declaration(const core::lisel& selection, node_id name, node_id value, node_id type)
-                : node(selection, node_type::EXPR_LOCAL_DECLARATION), name(name), value(value), type(type) {}
-            
-            node_id name; // Use up_expr instead of expr_identifier since variables can be declared within scopes.
-            node_id value;
-            node_id type;
+            t_node_id callee;
+            t_node_list type_argument_list;
+            t_node_list argument_list;
         };
         
         struct stmt_none : node {
@@ -184,42 +177,42 @@ namespace core {
         };
 
         struct stmt_if : node {
-            stmt_if(const core::lisel& selection, node_id condition, node_id consequent, node_id alternate)
+            stmt_if(const core::lisel& selection, t_node_id condition, t_node_id consequent, t_node_id alternate)
                 : node(selection, node_type::STMT_IF), condition(condition), consequent(consequent), alternate(alternate) {}
 
-            node_id condition;
-            node_id consequent;
-            node_id alternate;
+            t_node_id condition;
+            t_node_id consequent;
+            t_node_id alternate;
         };
         
         struct stmt_while : node {
-            stmt_while(const core::lisel& selection, node_id condition, node_id consequent, node_id alternate)
+            stmt_while(const core::lisel& selection, t_node_id condition, t_node_id consequent, t_node_id alternate)
                 : node(selection, node_type::STMT_WHILE), condition(condition), consequent(consequent), alternate(alternate) {}
 
-            node_id condition;
-            node_id consequent;
-            node_id alternate; // yes, we have else clauses in while loops
+            t_node_id condition;
+            t_node_id consequent;
+            t_node_id alternate; // yes, we have else clauses in while loops
         };
         
         struct stmt_return : node {
-            stmt_return(const core::lisel& selection, node_id expression)
+            stmt_return(const core::lisel& selection, t_node_id expression)
                 : node(selection, node_type::STMT_RETURN), expression(expression) {}
             
-            node_id expression;
+            t_node_id expression;
         };
 
         struct stmt_wrapper : node {
-            stmt_wrapper(node_id expression)
+            stmt_wrapper(t_node_id expression)
                 : node(core::lisel(0,0), node_type::STMT_WRAPPER), expression(expression) {}
 
-            node_id expression;
+            t_node_id expression;
         };
 
         struct stmt_body : node {
-            stmt_body(const core::lisel& selection, std::vector<node_id>&& statement_list)
+            stmt_body(const core::lisel& selection, t_node_list&& statement_list)
                 : node(selection, node_type::STMT_BODY), statement_list(std::move(statement_list)) {}
 
-            std::vector<node_id> statement_list;
+            t_node_list statement_list;
         };
 
         struct stmt_break : node {
@@ -233,35 +226,44 @@ namespace core {
         };
 
         struct s_stmt_use : node {
-            s_stmt_use(const core::lisel& selection, node_id path)
+            s_stmt_use(const core::lisel& selection, t_node_id path)
                 : node(selection, node_type::S_STMT_USE), path(path) {}
 
-            // The parser must ensure that this literal is a string. Store as node_id into arena.
-            node_id path;
+            // The parser must ensure that this literal is a string. Store as t_node_id into arena.
+            t_node_id path;
         };
 
         struct s_stmt_scoped_body : node {
-            s_stmt_scoped_body(const core::lisel& selection, std::vector<node_id>&& statement_list)
+            s_stmt_scoped_body(const core::lisel& selection, t_node_list&& statement_list)
                 : node(selection, node_type::S_STMT_SCOPED_BODY), statement_list(std::move(statement_list)) {}
 
-            std::vector<node_id> statement_list;
+            t_node_list statement_list;
         };
 
-        struct s_stmt_namespace : node {
-            s_stmt_namespace(const core::lisel& selection, node_id name, node_id content)
-                : node(selection, node_type::S_STMT_NAMESPACE), name(name), content(content) {}
+        struct s_stmt_module : node {
+            s_stmt_module(const core::lisel& selection, t_node_id name, t_node_id content)
+                : node(selection, node_type::S_STMT_MODULE), name(name), content(content) {}
 
-            node_id name;
-            node_id content;
+            t_node_id name;
+            t_node_id content;
         };
 
-        struct s_stmt_declaration : node {
-            s_stmt_declaration(const core::lisel& selection, node_id name, node_id value, node_id type)
-                : node(selection, node_type::S_STMT_DECLARATION), name(name), value(value), type(type) {}
+        struct variant_declaration : node {
+            variant_declaration(const core::lisel& selection, t_node_id name, t_node_id value, t_node_id type)
+                : node(selection, node_type::VARIANT_DECLARATION), name(name), value(value), type(type) {}
             
-            node_id name;
-            node_id value;
-            node_id type;
+            t_node_id name;
+            t_node_id value;
+            t_node_id type;
+        };
+
+        struct stmt_type_declaration : node {
+            stmt_type_declaration(const core::lisel& selection, t_node_id name, t_node_id type, t_node_list&& parameter_list)
+                : node(selection, node_type::STMT_TYPE_DECLARATION), name(name), type(type), parameter_list(std::move(parameter_list)) {}
+            
+            t_node_id name;
+            t_node_id type;
+            t_node_list parameter_list; // typedec resizable_with_array_with_t<T> = resizable<array<T>>
         };
 
         struct s_stmt_invalid : node {
@@ -288,7 +290,6 @@ namespace core {
                 expr_parameter,
                 expr_function,
                 expr_call,
-                expr_local_declaration,
 
                 stmt_none,
                 stmt_invalid,
@@ -302,8 +303,9 @@ namespace core {
 
                 s_stmt_use,
                 s_stmt_scoped_body,
-                s_stmt_namespace,
-                s_stmt_declaration,
+                s_stmt_module,
+                variant_declaration,
+                stmt_type_declaration,
                 s_stmt_invalid
             > _raw;
         };
@@ -313,51 +315,53 @@ namespace core {
             std::vector<arena_node> node_list = {};
 
             template <typename T>
-            inline node_id insert(T&& node) {
-                node_list.emplace_back(std::forward<T>(node));
+            inline t_node_id insert(T&& node) {
+                node_list.push_back(std::forward<T>(node));
                 return node_list.size() - 1;
             }
 
             template <typename T>
             // Insert a node into the arena and get its type.
             inline T& static_insert(T&& node) {
-                node_list.emplace_back(std::forward<T>(node));
+                node_list.push_back(std::forward<T>(node));
                 return std::get<T>(node_list.back()._raw);
             }
 
             
             template <typename T>
-            inline T& get(const node_id id) {
+            inline T& get(const t_node_id id) {
                 return std::get<T>(node_list[id]._raw);
             }
 
             template <typename T>
-            inline const T& get(const node_id id) const {
+            inline const T& get(const t_node_id id) const {
                 return std::get<T>(node_list[id]._raw);
             }
 
 
-            inline node* get_ptr(const node_id id) {
+            // Not safe for long-term pointer usage. Only use for direct modification and disposal of the given pointer.
+            inline node* get_base_ptr(const t_node_id id) {
                 return std::visit([](auto& n) { return (node*)(&n); }, node_list[id]._raw);
             }
 
-            inline const node* get_ptr(const node_id id) const {
+            // Not safe for long-term pointer usage. Only use for direct access and disposal of the given pointer.
+            inline const node* get_base_ptr(const t_node_id id) const {
                 return std::visit([](auto& n) { return (const node*)(&n); }, node_list[id]._raw);
             }
 
             
             template <typename T>
-            inline T& get_as(const node_id id) {
+            inline T& get_as(const t_node_id id) {
                 return std::get<T>(node_list[id]._raw);
             }
 
             template <typename T>
-            inline const T& get_as(const node_id id) const {
+            inline const T& get_as(const t_node_id id) const {
                 return std::get<T>(node_list[id]._raw);
             }
 
-            void pretty_debug(const liprocess& process, const node_id id, std::string& buffer, uint8_t indent = 0);
-            // void pretty_debug(const liprocess& process, const node* n, std::string& buffer, uint8_t indent = 0) const;
+            void pretty_debug(const liprocess& process, const t_node_id id, std::string& buffer, uint8_t indent = 0);
+            bool is_expression_wrappable(const t_node_id id);
         };
     }
 }

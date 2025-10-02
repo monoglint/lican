@@ -18,13 +18,14 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"break", core::token_type::BREAK},
     {"continue", core::token_type::CONTINUE},
     {"dec", core::token_type::DEC},
+    {"typedec", core::token_type::TYPEDEC},
     {"true", core::token_type::TRUE},
     {"false", core::token_type::FALSE},
     {"nil", core::token_type::NIL},
     {"use", core::token_type::USE},
     {"struct", core::token_type::STRUCT},
     {"component", core::token_type::COMPONENT},
-    {"namespace", core::token_type::NAMESPACE},
+    {"module", core::token_type::MODULE},
 };
 
 static const std::unordered_map<std::string, core::token_type> double_character_map = {
@@ -85,7 +86,7 @@ struct lex_state {
 
     inline char next() {
         if (now() == '\n') 
-            file.line_marker_list.emplace_back(pos);
+            file.line_marker_list.push_back(pos);
 
         return file.source_code[pos++];
     }

@@ -32,13 +32,14 @@ namespace core {
 
         // Variable and function declaration
         DEC,
+        TYPEDEC,
         
         USE,
 
         COLON,
         POUND,
         
-        NAMESPACE,
+        MODULE,
         
         PLUS,
         MINUS,
