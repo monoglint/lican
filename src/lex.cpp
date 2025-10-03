@@ -77,6 +77,8 @@ static const std::unordered_map<char, core::token_type> character_map = {
     {')', core::token_type::RPAREN},
     {'{', core::token_type::LBRACE},
     {'}', core::token_type::RBRACE},
+    {'[', core::token_type::LSQUARE},
+    {']', core::token_type::RSQUARE},
     {',', core::token_type::COMMA},
     {'<', core::token_type::LARROW},
     {'>', core::token_type::RARROW},

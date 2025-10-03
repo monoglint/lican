@@ -1,1 +1,1 @@
-use "std/io"module math {	dec add<T>(a: T, b: T)		return a + b}dec main() {	math::add<u8>(5, 2)}
+dec main() { while x < 5 && y > 3 {} else {}  }

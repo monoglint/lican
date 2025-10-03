@@ -83,6 +83,8 @@ namespace core {
         RBRACE,
         LARROW,
         RARROW,
+        LSQUARE,
+        RSQUARE,
     };
 
     struct token {

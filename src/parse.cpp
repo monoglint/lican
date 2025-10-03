@@ -28,10 +28,48 @@ in the given statement to be ignored. This can help prevent cascading problems.
 #include "ast.hpp"
 #include "token.hpp"
 
+// Constants
+
+// Used by function parameters and arguments.
+constexpr auto L_FUNC_DELIMITER = core::token_type::LPAREN;
+constexpr auto R_FUNC_DELIMITER = core::token_type::RPAREN;
+
+// Used by type parameters and arguments.
+constexpr auto L_TYPE_DELIMITER = core::token_type::LSQUARE;
+constexpr auto R_TYPE_DELIMITER = core::token_type::RSQUARE;
+
+// Like C-style braces.
+constexpr auto L_BODY_DELIMITER = core::token_type::LBRACE;
+constexpr auto R_BODY_DELIMITER = core::token_type::RBRACE;
+
+
+// Forward declarations
 struct parse_state;
 
+static core::ast::t_node_id parse_expression(parse_state& state);
+static core::ast::t_node_id parse_scope_resolution(parse_state& state);
+static core::ast::t_node_id parse_statement(parse_state& state);
+static core::ast::t_node_id parse_item(parse_state& state);
+static core::ast::t_node_id parse_variant_declaration(parse_state& state, const bool local_declaration);
+
+static core::ast::t_node_id parse_expr_type(parse_state& state);
+
+template <typename T_NODE, typename PARSE_FUNC>
+static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func);
+
+// Quick types
 using t_p_expression_function = core::ast::t_node_id(*)(parse_state& state);
 using t_token_set = std::unordered_set<core::token_type>;
+
+/*
+
+====================================================
+
+Basic sets for the binary expression segment of the parser
+
+====================================================
+
+*/
 
 static const t_token_set set_binary_scope_resolution = {
     core::token_type::DOUBLE_COLON
@@ -96,20 +134,6 @@ static const t_token_set set_binary_assignment = {
     core::token_type::SLASH_EQUAL,
     core::token_type::PERCENT_EQUAL,
     core::token_type::CARET_EQUAL
-};
-
-// Used by the error handler - Eats tokens all the way to the next statement.
-static const t_token_set set_statement_starters = {
-    core::token_type::IF,
-    core::token_type::WHILE,
-    core::token_type::LBRACE,
-    core::token_type::RETURN,
-    core::token_type::TYPEDEC,
-    core::token_type::BREAK,
-    core::token_type::CONTINUE,
-    core::token_type::USE,
-    core::token_type::MODULE,
-    core::token_type::DEC,
 };
 
 struct parse_state {
@@ -177,18 +201,6 @@ struct parse_state {
             f_pause_errors = true;        
     }
 };
-
-// Forward declarations
-static core::ast::t_node_id parse_expression(parse_state& state);
-static core::ast::t_node_id parse_scope_resolution(parse_state& state);
-static core::ast::t_node_id parse_statement(parse_state& state);
-static core::ast::t_node_id parse_item(parse_state& state);
-static core::ast::t_node_id parse_variant_declaration(parse_state& state, const bool local_declaration);
-
-static core::ast::t_node_id parse_expr_type(parse_state& state);
-
-template <typename T_NODE, typename PARSE_FUNC>
-static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func);
 
 static core::ast::t_node_id parse_optional_type(parse_state& state) {
     if (state.now().type == core::token_type::COLON) {
@@ -300,8 +312,8 @@ static core::ast::t_node_id parse_expr_identifier(parse_state& state) {
 static core::ast::t_node_id parse_expr_function(parse_state& state) {
     const core::token& start_token = state.now();
 
-    core::ast::t_node_list type_parameter_list = parse_list(state, parse_expr_identifier, true, core::token_type::LARROW, core::token_type::RARROW);
-    core::ast::t_node_list parameter_list = parse_list(state, parse_expr_parameter, false, core::token_type::LPAREN, core::token_type::RPAREN);
+    core::ast::t_node_list type_parameter_list = parse_list(state, parse_expr_identifier, true, L_TYPE_DELIMITER, R_TYPE_DELIMITER);
+    core::ast::t_node_list parameter_list = parse_list(state, parse_expr_parameter, false, L_FUNC_DELIMITER, R_FUNC_DELIMITER);
     const core::ast::t_node_id return_type = parse_optional_type(state);
 
     const core::ast::t_node_id body = parse_statement(state);
@@ -351,12 +363,19 @@ static core::ast::t_node_id parse_member_access(parse_state& state) {
 
 static core::ast::t_node_id parse_expr_call(parse_state& state) {
     const core::ast::t_node_id expression = parse_member_access(state);
+    const core::ast::node_type expr_type = state.arena.get_base_ptr(expression)->type;
 
-    if (state.now().type != core::token_type::LPAREN && state.now().type != core::token_type::LARROW)
+    if (
+        expr_type != core::ast::node_type::EXPR_BINARY
+        && expr_type != core::ast::node_type::EXPR_IDENTIFIER
+        ||
+        state.now().type != L_FUNC_DELIMITER
+        && state.now().type != L_TYPE_DELIMITER
+    )
         return expression;
 
-    core::ast::t_node_list type_argument_list = parse_list(state, parse_expr_type, true, core::token_type::LARROW, core::token_type::RARROW);
-    core::ast::t_node_list argument_list = parse_list(state, parse_expression, false, core::token_type::LPAREN, core::token_type::RPAREN);
+    core::ast::t_node_list type_argument_list = parse_list(state, parse_expr_type, true, L_TYPE_DELIMITER, R_TYPE_DELIMITER);
+    core::ast::t_node_list argument_list = parse_list(state, parse_expression, false, L_FUNC_DELIMITER, R_FUNC_DELIMITER);
 
     return state.arena.insert(core::ast::expr_call(core::lisel(state.arena.get_base_ptr(expression)->selection, state.now().selection), expression, std::move(type_argument_list), std::move(argument_list)));
 }
@@ -465,17 +484,8 @@ static core::ast::t_node_id parse_stmt_while(parse_state& state) {
 
 template <typename T_NODE, typename PARSE_FUNC>
 static core::ast::t_node_id parse_item_body(parse_state& state, PARSE_FUNC& parse_func) {
-    const core::token& brace_token = state.next();
-    core::ast::t_node_list item_list;
-
-    while (!state.at_eof() && state.now().type != core::token_type::RBRACE) {
-        item_list.push_back(parse_func(state));
-    }
-
-    if (state.at_eof())
-        state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Expected '}', got EOF.");
-    else
-        state.pos++;
+    const core::token& brace_token = state.now();
+    core::ast::t_node_list item_list = parse_list(state, parse_func, false, L_BODY_DELIMITER, R_BODY_DELIMITER);
         
     return state.arena.insert(T_NODE(core::lisel(brace_token.selection, state.now().selection), std::move(item_list)));
 }
@@ -521,8 +531,8 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
     core::ast::t_node_id value;
 
     switch (state.now().type) {
-        case core::token_type::LARROW: // for potential type parameters
-        case core::token_type::LPAREN:
+        case L_TYPE_DELIMITER: // for potential type parameters
+        case L_FUNC_DELIMITER:
             if (!local_declaration) {
                 value = parse_expr_function(state);
                 break;
@@ -546,7 +556,7 @@ static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
     const core::token& start_token = state.next();
     
     const core::ast::t_node_id name = parse_scope_resolution(state);
-    core::ast::t_node_list parameter_list = parse_list(state, parse_expr_identifier, true, core::token_type::LARROW, core::token_type::RARROW);
+    core::ast::t_node_list parameter_list = parse_list(state, parse_expr_identifier, true, L_TYPE_DELIMITER, R_TYPE_DELIMITER);
 
     state.expect(core::token_type::EQUAL, "Expected '='.");
 
@@ -566,7 +576,7 @@ static core::ast::t_node_id parse_item(parse_state& state) {
         case core::token_type::MODULE: return parse_item_module(state);
         case core::token_type::DEC: return parse_variant_declaration(state, false);
         case core::token_type::TYPEDEC: return parse_item_type_declaration(state);
-        case core::token_type::LBRACE: return parse_item_body<core::ast::item_body>(state, parse_item);
+        case L_BODY_DELIMITER: return parse_item_body<core::ast::item_body>(state, parse_item);
         default: {
             const core::ast::node* statement = state.arena.get_base_ptr(parse_statement(state));
             state.log_and_pause_errors(core::lilog::log_level::ERROR, statement->selection, "The given item can only be used in a function body.");
@@ -584,7 +594,7 @@ static core::ast::t_node_id parse_statement(parse_state& state) {
     switch (tok.type) {
         case core::token_type::IF: return parse_stmt_if(state);
         case core::token_type::WHILE: return parse_stmt_while(state);
-        case core::token_type::LBRACE: return parse_item_body<core::ast::item_body>(state, parse_statement);
+        case L_BODY_DELIMITER: return parse_item_body<core::ast::item_body>(state, parse_statement);
         case core::token_type::RETURN: return parse_stmt_return(state);
         case core::token_type::TYPEDEC: return parse_item_type_declaration(state);
         case core::token_type::BREAK: return state.arena.insert(core::ast::stmt_break(state.next().selection));
