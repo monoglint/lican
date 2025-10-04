@@ -1,1 +1,1 @@
-dec main() { while x < 5 && y > 3 {} else {}  }
+dec main() { dec x: 5 dec y: int = 5 }

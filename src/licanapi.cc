@@ -2,10 +2,10 @@
 #include <iostream>
 #include <filesystem>
 
-#include "licanapi.hpp"
-#include "core.hpp"
-#include "token.hpp"
-#include "ast.hpp"
+#include "licanapi.hh"
+#include "core.hh"
+#include "token.hh"
+#include "ast.hh"
 
 const std::string TEMP_FOLDER_LOCATION = "LICANWRITE0";
 

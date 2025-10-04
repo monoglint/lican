@@ -17,8 +17,8 @@ To see where flags are used throughout the compiler, ctrl+shift+f their name.
 #include <chrono>
 #include <cstdlib>
 
-#include "licanapi.hpp"
-#include "core.hpp"
+#include "licanapi.hh"
+#include "core.hh"
 
 // Note: Index 0 is the command name
 using t_command_data = std::vector<std::string>;

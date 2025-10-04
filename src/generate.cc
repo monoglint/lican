@@ -1,5 +1,5 @@
-#include "core.hpp"
-#include "ast.hpp"
+#include "core.hh"
+#include "ast.hh"
 
 struct generate_state {
     generate_state(core::liprocess& process, const core::t_file_id file_id)

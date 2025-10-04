@@ -8,14 +8,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Your targets here...
 
 add_executable(licanc
-    src/main.cpp
-    src/lex.cpp
-    src/parse.cpp
-    src/licanapi.cpp
-    src/core.cpp
-    src/semantic.cpp
-    src/generate.cpp
-    src/ast.cpp
+    src/main.cc
+    src/lex.cc
+    src/parse.cc
+    src/licanapi.cc
+    src/core.cc
+    src/semantic.cc
+    src/generate.cc
+    src/ast.cc
     resources/resources.rc
 )
 

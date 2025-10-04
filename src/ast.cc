@@ -1,4 +1,4 @@
-#include "ast.hpp"
+#include "ast.hh"
 
 bool core::ast::ast_arena::is_expression_wrappable(const t_node_id id) {
     const node* base = get_base_ptr(id);
@@ -167,12 +167,6 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent) + "stmt_return\n";
             buffer += liutil::indent_repeat(indent+1) + "expression:\n";
             pretty_debug(process, v.expression, buffer, indent+2);
-            break;
-        }
-        case node_type::STMT_WRAPPER: {
-            const auto& v = std::get<stmt_wrapper>(an._raw);
-            buffer += liutil::indent_repeat(indent) + "stmt_wrapper\n";
-            pretty_debug(process, v.expression, buffer, indent+1);
             break;
         }
         case node_type::ITEM_BODY: {

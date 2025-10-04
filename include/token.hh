@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.hpp"
+#include "core.hh"
 
 namespace core {
     enum class token_type : uint16_t {

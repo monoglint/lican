@@ -20,7 +20,7 @@ Holds the declarations for all of the stages of the compiler.
 #include <iostream>
 #include <fstream>
 
-#include "licanapi.hpp"
+#include "licanapi.hh"
 
 namespace core {
     using t_file_id = int16_t;

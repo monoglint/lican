@@ -1,4 +1,4 @@
-#include "core.hpp"
+#include "core.hh"
 
 bool core::frontend::init(liprocess& process) {
     bool add_success = process.add_file(process.config.entry_point_path);

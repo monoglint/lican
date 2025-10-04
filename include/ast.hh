@@ -14,9 +14,9 @@ Contains all of the AST node declarations. Used by the frontend and read by the 
 #include <memory>
 #include <variant>
 
-#include "util.hpp"
-#include "core.hpp"
-#include "token.hpp"
+#include "util.hh"
+#include "core.hh"
+#include "token.hh"
 
 namespace core {
     namespace ast {
@@ -43,7 +43,6 @@ namespace core {
             STMT_IF,
             STMT_WHILE,
             STMT_RETURN,
-            STMT_WRAPPER,
             ITEM_BODY,
             STMT_BREAK,
             STMT_CONTINUE,
@@ -209,13 +208,6 @@ namespace core {
             t_node_id expression;
         };
 
-        struct stmt_wrapper : node {
-            stmt_wrapper(t_node_id expression)
-                : node(core::lisel(0,0), node_type::STMT_WRAPPER), expression(expression) {}
-
-            t_node_id expression;
-        };
-
         struct item_body : node {
             item_body(const core::lisel& selection, t_node_list&& item_list)
                 : node(selection, node_type::ITEM_BODY), item_list(std::move(item_list)) {}
@@ -297,7 +289,6 @@ namespace core {
                 stmt_if,
                 stmt_while,
                 stmt_return,
-                stmt_wrapper,
                 item_body,
                 stmt_break,
                 stmt_continue,

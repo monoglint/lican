@@ -18,9 +18,9 @@ Written by @monoglint
 #include <filesystem>
 #include <iostream>
 
-#include "core.hpp"
-#include "token.hpp"
-#include "util.hpp"
+#include "core.hh"
+#include "token.hh"
+#include "util.hh"
 
 static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"if", core::token_type::IF},
