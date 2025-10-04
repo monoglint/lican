@@ -7,7 +7,21 @@
 #include "token.hh"
 #include "ast.hh"
 
-const std::string TEMP_FOLDER_LOCATION = "LICANWRITE0";
+static inline bool contains_flag(const std::vector<std::string>& flags, const std::string& flag) {
+    return std::find(flags.begin(), flags.end(), flag) != flags.end();
+}
+
+licanapi::liconfig::liconfig(const liconfig_init init) : 
+    project_path(init.project_path), 
+    entry_point_path(init.project_path + (init.project_path.length() > 0 ? "/" : "") + init.entry_point_subpath),
+    output_path(init.output_path),
+    _dump_token_list(contains_flag(init.flag_list, "-t")),
+    _dump_ast(contains_flag(init.flag_list, "-a")),
+    _dump_logs(contains_flag(init.flag_list, "-l")),
+    _dump_chrono(contains_flag(init.flag_list, "-c")),
+    _show_cascading_logs(contains_flag(init.flag_list, "-s")) {}
+
+const std::string WRITE_CMD_TEMP_LOCATION = "LICANWRITE0";
 
 std::pair<bool, std::chrono::milliseconds> measure_func(bool (*func)(core::liprocess&, const core::t_file_id), core::liprocess& process) {
     std::chrono::time_point start = std::chrono::high_resolution_clock::now();
@@ -53,7 +67,7 @@ bool run_chrono(core::liprocess& process) {
 }
 
 bool create_temp_file(const std::string& name, const std::string& content) {    
-    std::ofstream temp(TEMP_FOLDER_LOCATION + '/' + name);
+    std::ofstream temp(WRITE_CMD_TEMP_LOCATION + '/' + name);
 
     if (!temp.is_open()) {
         std::cout << "Failed to generate temporary lican file.\n";
@@ -115,12 +129,12 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
 }
 
 bool licanapi::build_code(const std::string& code, const std::vector<std::string>& flag_list) {
-    std::filesystem::create_directory(TEMP_FOLDER_LOCATION);
+    std::filesystem::create_directory(WRITE_CMD_TEMP_LOCATION);
 
     create_temp_file("main.lican", code);
 
     licanapi::liconfig_init config;
-    config.project_path = TEMP_FOLDER_LOCATION;
+    config.project_path = WRITE_CMD_TEMP_LOCATION;
     config.entry_point_subpath = "main.lican";
     config.flag_list = flag_list;
 

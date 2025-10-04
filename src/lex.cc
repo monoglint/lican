@@ -22,7 +22,7 @@ Written by @monoglint
 #include "token.hh"
 #include "util.hh"
 
-static const std::unordered_map<std::string, core::token_type> keyword_map = {
+static const std::unordered_map<std::string, core::token_type> token_keyword_map = {
     {"if", core::token_type::IF},
     {"else", core::token_type::ELSE},
     {"for", core::token_type::FOR},
@@ -41,7 +41,7 @@ static const std::unordered_map<std::string, core::token_type> keyword_map = {
     {"module", core::token_type::MODULE},
 };
 
-static const std::unordered_map<std::string, core::token_type> double_character_map = {
+static const std::unordered_map<std::string, core::token_type> token_double_character_map = {
     {"&&", core::token_type::DOUBLE_AMPERSAND},
     {"||", core::token_type::DOUBLE_PIPE},
     {"::", core::token_type::DOUBLE_COLON},
@@ -59,7 +59,7 @@ static const std::unordered_map<std::string, core::token_type> double_character_
     {"--", core::token_type::DOUBLE_MINUS},
 };
 
-static const std::unordered_map<char, core::token_type> character_map = {
+static const std::unordered_map<char, core::token_type> token_character_map = {
     {'+', core::token_type::PLUS},
     {'-', core::token_type::MINUS},
     {'*', core::token_type::ASTERISK},
@@ -234,8 +234,8 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 
 			std::string identifier_string = process.sub_source_code(selection);
 			
-			if (keyword_map.find(identifier_string) != keyword_map.end()) {
-                token_list.emplace_back(keyword_map.at(identifier_string), selection);
+			if (token_keyword_map.find(identifier_string) != token_keyword_map.end()) {
+                token_list.emplace_back(token_keyword_map.at(identifier_string), selection);
                 continue;
 			}
 
@@ -245,16 +245,16 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 		}
 
         // Double character tokens.
-		if (!state.at_eof() && double_character_map.find(std::string{current_char, state.peek()}) != double_character_map.end()) {
-            token_list.emplace_back(double_character_map.at(std::string{current_char, state.peek()}), lisel(state.file_id, state.pos, state.pos + 1));
+		if (!state.at_eof() && token_double_character_map.find(std::string{current_char, state.peek()}) != token_double_character_map.end()) {
+            token_list.emplace_back(token_double_character_map.at(std::string{current_char, state.peek()}), lisel(state.file_id, state.pos, state.pos + 1));
 
             state.next(); state.next();
 			continue;
 		}
 
 		// Single character tokens.
-		if (character_map.find(current_char) != character_map.end()) {
-            token_list.emplace_back(character_map.at(current_char), state.get_selection());
+		if (token_character_map.find(current_char) != token_character_map.end()) {
+            token_list.emplace_back(token_character_map.at(current_char), state.get_selection());
 
 			state.next();
 			continue;

@@ -1,1 +1,1 @@
-dec main() { dec x: 5 dec y: int = 5 }
+module math {	dec fib[T](n: T): T		if (n < 2)			return n		else			return fib(n - 1) + fib(n - 2)}dec main() {	dec i = 0	while i < 20 {		io::write(fib[u8](i))		i++	}}
