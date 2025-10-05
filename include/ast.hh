@@ -51,7 +51,15 @@ namespace core {
             ITEM_MODULE,
             VARIANT_DECLARATION,
             ITEM_TYPE_DECLARATION,
-            ITEM_COMPONENT_DECLARATION,
+
+            EXPR_STRUCT_MEMBER,
+            EXPR_STRUCT_OPERATOR,
+            EXPR_STRUCT_LIFECYCLE_MEMBER,
+            ITEM_STRUCT_DECLARATION,
+
+            EXPR_ENUM_SET,
+            ITEM_ENUM,
+
             ITEM_INVALID,
         };
 
@@ -256,32 +264,67 @@ namespace core {
             t_node_list parameter_list; // typedec resizable_with_array_with_t<T> = resizable<array<T>>
         };
 
-            struct item_struct_member : node {
+            // Properties & methods
+            struct expr_struct_member : node {
+                expr_struct_member(const core::lisel& selection, const t_node_id name, const t_node_id value_type, const t_node_id default_value, const bool is_internal)
+                    : node(selection, node_type::EXPR_STRUCT_MEMBER), name(name), value_type(value_type), default_value(default_value), is_internal(is_internal) {}
+
                 t_node_id name;
                 t_node_id value_type;
                 t_node_id default_value;
 
                 bool is_internal;
             };
-
-            enum class lifecycle_member_type {
-                CONSTRUCTOR,
-                DESTRUCTOR,
+            
+            struct expr_struct_operator : node {
+                expr_struct_operator(const core::lisel& selection, const core::token_type opr, const t_node_id function)
+                    : node(selection, node_type::EXPR_STRUCT_OPERATOR), opr(opr), function(function) {}
+                    
+                core::token_type opr;
+                t_node_id function; // parser should syntactically ensure that the parameters to the function are semantically accurate
             };
 
-            struct item_struct_lifecycle_member : node {
+            // Lifecycle specific methods
+            struct expr_struct_lifecycle_member : node {
+                enum class lifecycle_member_type {
+                    CONSTRUCTOR,
+                    COPY_CONSTRUCTOR,
+                    DESTRUCTOR,
+                };
+
+                expr_struct_lifecycle_member(const core::lisel& selection, const t_node_id name, const lifecycle_member_type lifecycle_type)
+                    : node(selection, node_type::EXPR_STRUCT_LIFECYCLE_MEMBER), name(name), lifecycle_type(lifecycle_type) {}
+
                 t_node_id name;
                 lifecycle_member_type lifecycle_type;
             };
 
             struct item_struct_declaration : node {
+                item_struct_declaration(const core::lisel& selection, const t_node_id name, t_node_list&& template_parameter_list, t_node_list&& member_list)
+                    : node(selection, node_type::ITEM_STRUCT_DECLARATION), name(name), template_parameter_list(std::move(template_parameter_list)), member_list(std::move(member_list)) {}
+
                 t_node_id name;
-                t_node_id constructors;
 
                 t_node_list template_parameter_list;
-                t_node_list member_list; // item_struct_member
-                t_node_list lifecycle_member_list;
+                t_node_list member_list; // struct_member, operator_overload, or struct_lifecycle_member
             };
+
+        
+        struct expr_enum_set : node {
+            expr_enum_set(const core::lisel& selection, const t_node_id name, const t_node_id custom_value)
+                : node(selection, node_type::EXPR_ENUM_SET), name(name), custom_value(custom_value) {}
+
+            t_node_id name;
+            t_node_id custom_value;
+        };
+        
+        struct item_enum : node {
+            item_enum(const core::lisel& selection, const t_node_id name, t_node_list&& set_list)
+                : node(selection, node_type::EXPR_ENUM_SET), name(name), set_list(std::move(set_list)) {}
+
+            t_node_id name;
+            t_node_list set_list;
+        };
 
         struct item_invalid : node {
             item_invalid(const core::lisel& selection)
@@ -321,6 +364,12 @@ namespace core {
                 item_module,
                 variant_declaration,
                 item_type_declaration,
+
+                expr_struct_member,
+                expr_struct_operator,
+                expr_struct_lifecycle_member,
+                item_struct_declaration,
+                
                 item_invalid
             > _raw;
         };

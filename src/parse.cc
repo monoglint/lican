@@ -14,6 +14,14 @@ Statement nodes are items that can only exist in function bodies.
 
 ====================================================
 
+TERMINOLOGY NOTE
+
+Although this project works on an adjective-noun based naming convention, the AST and parser puts stmt, item, and expr before
+the node type specification for better lookup. This might be changed in the future.
+
+====================================================
+
+
 Inside of the parser, always invoke logs using state.log_and_pause errors if you want every other error
 in the given statement to be ignored. This can help prevent cascading problems.
 
@@ -28,26 +36,47 @@ in the given statement to be ignored. This can help prevent cascading problems.
 #include "ast.hh"
 #include "token.hh"
 
-// Constants
+/*
 
-const auto LIST_DELIMITER = core::token_type::COMMA;
+====================================================
 
-const auto L_EXPR_DELIMITER = core::token_type::LPAREN;
-const auto R_EXPR_DELIMITER = core::token_type::RPAREN;
+Constants
+Here at Lican, we present half-softcoded files.
+
+====================================================
+
+*/
+
+// Delimits arguments, tables, etc.
+constexpr auto LIST_DELIMITER = core::token_type::COMMA;
+
+constexpr auto L_EXPR_DELIMITER = core::token_type::LPAREN;
+constexpr auto R_EXPR_DELIMITER = core::token_type::RPAREN;
 
 // Used by function parameters and arguments.
-const auto L_FUNC_DELIMITER = core::token_type::LPAREN;
-const auto R_FUNC_DELIMITER = core::token_type::RPAREN;
+constexpr auto L_FUNC_DELIMITER = core::token_type::LPAREN;
+constexpr auto R_FUNC_DELIMITER = core::token_type::RPAREN;
 
 // Used by type parameters and arguments.
-const auto L_TYPE_DELIMITER = core::token_type::LSQUARE;
-const auto R_TYPE_DELIMITER = core::token_type::RSQUARE;
+constexpr auto L_TYPE_DELIMITER = core::token_type::LSQUARE;
+constexpr auto R_TYPE_DELIMITER = core::token_type::RSQUARE;
 
 // Like C-style braces.
-const auto L_BODY_DELIMITER = core::token_type::LBRACE;
-const auto R_BODY_DELIMITER = core::token_type::RBRACE;
+constexpr auto L_BODY_DELIMITER = core::token_type::LBRACE;
+constexpr auto R_BODY_DELIMITER = core::token_type::RBRACE;
 
-const auto TYPE_DENOTER = core::token_type::COLON;
+constexpr auto TYPE_DENOTER = core::token_type::COLON;
+
+// dec mutable_pointer: #@u8 = @number
+constexpr auto TYPE_MUTABILITY_SYMBOL = core::token_type::POUND;
+constexpr auto TYPE_POINTER_SYMBOL = core::token_type::AT;
+
+// dec x = 5
+constexpr auto ASSIGNMENT_SYMBOL = core::token_type::EQUAL;
+
+// x ? 5 : 2
+constexpr auto TERNARY_CONDITION_SYMBOL = core::token_type::QUESTION;
+constexpr auto TERNARY_ELSE_SYMBOL = core::token_type::COLON;
 
 // Forward declarations
 struct parse_state;
@@ -96,13 +125,6 @@ static const t_token_set unary_pre_set = {
     core::token_type::AT, // address of
     core::token_type::ASTERISK // derference
 };
-
-/*
-
-dec x: i32 = 5
-
-
-*/
 
 static const t_token_set binary_exponential_set = {
     core::token_type::CARET
@@ -293,10 +315,10 @@ static core::ast::t_node_list parse_list(parse_state& state, FUNC func, const co
 }
 
 static core::ast::t_node_id parse_expr_type(parse_state& state) {
-    const bool is_mutable = state.now().type == core::token_type::POUND;
+    const bool is_mutable = state.now().type == TYPE_MUTABILITY_SYMBOL;
     if (is_mutable) state.next();
 
-    const bool is_pointer = state.now().type == core::token_type::AT;
+    const bool is_pointer = state.now().type == TYPE_POINTER_SYMBOL;
     if (is_pointer) state.next();
 
     const core::ast::t_node_id source = parse_scope_resolution(state);
@@ -314,7 +336,7 @@ static core::ast::t_node_id parse_expr_parameter(parse_state& state) {
    
     core::ast::t_node_id default_value;
 
-    if (state.now().type == core::token_type::EQUAL) {
+    if (state.now().type == ASSIGNMENT_SYMBOL) {
         state.pos++;
         default_value = parse_expression(state);
     }
@@ -448,12 +470,12 @@ static core::ast::t_node_id parse_or(parse_state& state) {
 
 static core::ast::t_node_id parse_expr_ternary(parse_state& state) {
     const core::ast::t_node_id first = parse_or(state);
-    if (state.now().type != core::token_type::QUESTION)
+    if (state.now().type != TERNARY_CONDITION_SYMBOL)
         return first;
    
     state.pos++;
     const core::ast::t_node_id second = parse_expression(state);
-    state.expect(core::token_type::COLON, "Expected a colon.");
+    state.expect(TERNARY_ELSE_SYMBOL, "Expected a ternary-else-symbol.");
     const core::ast::t_node_id third = parse_expression(state);
    
     return state.arena.insert(core::ast::expr_ternary(core::lisel(state.arena.get_base_ptr(first)->selection, state.arena.get_base_ptr(third)->selection), first, second, third));
@@ -514,7 +536,7 @@ static core::ast::t_node_id parse_stmt_return(parse_state& state) {
 
     core::ast::t_node_id expression;
 
-    if (state.now().type == core::token_type::RBRACE)
+    if (state.now().type == R_BODY_DELIMITER)
         expression = state.arena.insert(core::ast::expr_none(state.now().selection));
     else
         expression = parse_expression(state);
@@ -560,7 +582,7 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
             state.log_and_pause_errors(core::lilog::log_level::ERROR, state.next().selection, "Functions can not be declared in function bodies. Declare a closure instead.");
             value = state.arena.insert(core::ast::expr_invalid(state.now().selection));
             break;
-        case core::token_type::EQUAL:
+        case ASSIGNMENT_SYMBOL:
             state.pos++;
             value = parse_expression(state);
             break;
@@ -577,7 +599,7 @@ static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
     const core::ast::t_node_id name = parse_scope_resolution(state);
     core::ast::t_node_list parameter_list = parse_list<true, true>(state, parse_expr_identifier, L_TYPE_DELIMITER, R_TYPE_DELIMITER);
 
-    state.expect(core::token_type::EQUAL, "Expected '='.");
+    state.expect(ASSIGNMENT_SYMBOL, "Expected an assignment token.");
 
     const core::ast::t_node_id type_value = parse_expr_type(state);
 

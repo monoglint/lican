@@ -22,6 +22,8 @@ Transparency note:
 Individual cases in this function were initially written to be functions in each ast node.
 Copilot was used to transfer the contents of those functions into one giant one for the arena struct.
 
+For newer functions, copilot has been found useful for filling in the useless boilerplate.
+
 */
 
 void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_id id, std::string& buffer, uint8_t indent) {
@@ -228,6 +230,71 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent+1) + "type:\n";
             pretty_debug(process, v.type_value, buffer, indent+2);
 
+            break;
+        }
+        case node_type::EXPR_STRUCT_MEMBER: {
+            {
+                const auto& v = std::get<core::ast::expr_struct_member>(an._raw);
+                buffer += liutil::indent_repeat(indent) + "expr_struct_member\n";
+                buffer += liutil::indent_repeat(indent+1) + "name:\n";
+                pretty_debug(process, v.name, buffer, indent+2);
+                buffer += liutil::indent_repeat(indent+1) + "value_type:\n";
+                pretty_debug(process, v.value_type, buffer, indent+2);
+                buffer += liutil::indent_repeat(indent+1) + "default_value:\n";
+                pretty_debug(process, v.default_value, buffer, indent+2);
+                buffer += liutil::indent_repeat(indent+1) + "is_internal: " + (v.is_internal ? "true" : "false") + '\n';
+            }
+            break;
+        }
+        case node_type::EXPR_STRUCT_OPERATOR: {
+            {
+                const auto& v = std::get<core::ast::expr_struct_operator>(an._raw);
+                buffer += liutil::indent_repeat(indent) + "expr_struct_operator\n";
+                buffer += liutil::indent_repeat(indent+1) + "opr: ";
+                // expr_struct_operator only stores a token_type (no source selection), print numeric value
+                buffer += std::to_string(static_cast<int>(v.opr)) + '\n';
+                buffer += liutil::indent_repeat(indent+1) + "function:\n";
+                pretty_debug(process, v.function, buffer, indent+2);
+            }
+            break;
+        }
+        case node_type::EXPR_STRUCT_LIFECYCLE_MEMBER: {
+            {
+                const auto& v = std::get<core::ast::expr_struct_lifecycle_member>(an._raw);
+                buffer += liutil::indent_repeat(indent) + "expr_struct_lifecycle_member\n";
+                buffer += liutil::indent_repeat(indent+1) + "name:\n";
+                pretty_debug(process, v.name, buffer, indent+2);
+                buffer += liutil::indent_repeat(indent+1) + "lifecycle_type: ";
+                switch (v.lifecycle_type) {
+                    case core::ast::expr_struct_lifecycle_member::lifecycle_member_type::CONSTRUCTOR:
+                        buffer += "CONSTRUCTOR\n";
+                        break;
+                    case core::ast::expr_struct_lifecycle_member::lifecycle_member_type::COPY_CONSTRUCTOR:
+                        buffer += "COPY_CONSTRUCTOR\n";
+                        break;
+                    case core::ast::expr_struct_lifecycle_member::lifecycle_member_type::DESTRUCTOR:
+                        buffer += "DESTRUCTOR\n";
+                        break;
+                    default:
+                        buffer += "UNKNOWN\n";
+                        break;
+                }
+            }
+            break;
+        }
+        case node_type::ITEM_STRUCT_DECLARATION: {
+            {
+                const auto& v = std::get<core::ast::item_struct_declaration>(an._raw);
+                buffer += liutil::indent_repeat(indent) + "item_struct_declaration\n";
+                buffer += liutil::indent_repeat(indent+1) + "name:\n";
+                pretty_debug(process, v.name, buffer, indent+2);
+
+                buffer += liutil::indent_repeat(indent+1) + "template_parameters:\n";
+                for (const core::ast::t_node_id& p : v.template_parameter_list) pretty_debug(process, p, buffer, indent+2);
+
+                buffer += liutil::indent_repeat(indent+1) + "members:\n";
+                for (const core::ast::t_node_id& m : v.member_list) pretty_debug(process, m, buffer, indent+2);
+            }
             break;
         }
         case node_type::ITEM_INVALID: {
