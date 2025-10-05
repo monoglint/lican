@@ -4,7 +4,7 @@
 
 Holds command interface operations. Can be replaced by software integrating this compiler.
 
-To edit flag information, go to licanapi.hpp.
+To edit flag information, go to licanapi.hh.
 To see where flags are used throughout the compiler, ctrl+shift+f their name.
 
 ====================================================
@@ -36,7 +36,7 @@ t_command_data parse_string_command(const std::string& line) {
 
     auto push_buffer = [&](const std::string& buf) {
         if (buf.empty()) return;
-        // Check for grouped short options (-rf)
+        // Check for grouped short options (e.g. -rf)
         if (buf.size() > 1 && buf[0] == '-' && buf[1] != '-') {
             for (size_t i = 1; i < buf.size(); i++) {
                 args.push_back(std::string("-") + buf[i]);
@@ -142,12 +142,15 @@ bool WRITE(const t_command_data& command) {
 }
 
 bool STRESS(const t_command_data& command) {
-    if (command.size() != 2)
-        return false;
+    std::cout << "Command temporarily disabled - Use -c and write.\n";
 
-    std::string buffer(static_cast<size_t>(std::stoull(command[1])), '/');
+    return false;
+    // if (command.size() != 2)
+    //     return false;
 
-    return licanapi::build_code(buffer, {"-c"});
+    // std::string buffer(static_cast<size_t>(std::stoull(command[1])), '/');
+
+    // return licanapi::build_code(buffer, {"-c"});
 }
 
 bool FLAGS(const t_command_data& command) {
@@ -162,8 +165,9 @@ bool FLAGS(const t_command_data& command) {
 }
 
 bool VERSION(const t_command_data& command) {
-    std::cout << "lican v0.2.0-alpha\n";
+    std::cout << "lican v0.4.0-alpha\n";
     std::cout << "licancli v0.2.0-rc\n";
+
     return true;
 }
 

@@ -48,14 +48,8 @@ namespace core {
         t_pos end;
         t_file_id file_id;
         
-        // Downshift operator
-        inline lisel operator-(t_pos amount) const {
-            return lisel(start - amount, end - amount);
-        }
-        // Upshift operator
-        inline lisel operator+(t_pos amount) const {
-            return lisel(start + amount, end + amount);
-        }
+        inline lisel operator-(t_pos amount) const { return lisel(start - amount, end - amount); }
+        inline lisel operator+(t_pos amount) const { return lisel(start + amount, end + amount); }
 
         inline lisel& operator++() {
             start++;
@@ -75,7 +69,8 @@ namespace core {
         enum class log_level : uint8_t {
             LOG,
             WARNING,
-            ERROR
+            ERROR,
+            COMPILER_ERROR,
         };
 
         lilog(const log_level level, const lisel& selection, const std::string& message)
@@ -102,28 +97,11 @@ namespace core {
             std::any dump_token_list;                   // std::vector<token>
             std::any dump_ast_arena;                     // ast::ast_arena
 
-            // Both functions below are written by ChatGPT for O(log n). Initial function method written by me in O(n)
+            // 0-indexed
+            t_pos get_line_of_position(const t_pos position) const;
             
             // 0-indexed
-            inline t_pos get_line_of_position(const t_pos position) const {
-                auto it = std::upper_bound(line_marker_list.begin(), line_marker_list.end(), position);
-                
-                if (it == line_marker_list.begin()) return 0;
-                    return std::distance(line_marker_list.begin(), it);
-            }
-
-            // 0-indexed
-            inline t_pos get_column_of_position(const t_pos position) const {
-                auto it = std::upper_bound(line_marker_list.begin(), line_marker_list.end(), position);
-
-                if (it == line_marker_list.begin())
-                    return position;
-                else {
-                    auto prev_newline = *(it - 1);
-                    return position - prev_newline - 1;
-                }
-            }
-
+            t_pos get_column_of_position(const t_pos position) const;
         };
 
         liprocess(const licanapi::liconfig_init& config_init)
@@ -134,21 +112,7 @@ namespace core {
         std::vector<lilog> log_list;
         std::vector<lifile> file_list;
 
-        inline bool add_file(const std::string& path) {
-            if (file_list.size() > MAX_FILES)
-                return false; // EVIL(ER)
-
-            std::ifstream file(path);
-
-            if (!file.is_open())
-                return false;   // EVIL
-
-            const std::string contents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-            file_list.emplace_back(path, contents);
-
-            return true;
-        }
+        bool add_file(const std::string& path);
 
         inline void add_log(const lilog::log_level level, const lisel& selection, const std::string& message) {
             log_list.emplace_back(level, selection, message);

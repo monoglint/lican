@@ -109,6 +109,8 @@ bool licanapi::build_project(const licanapi::liconfig_init& config) {
     }
 
     for (auto& file : process.file_list) {
+        std::cout << "FILE - '" << file.path << "':\n";
+        
         if (process.config._dump_token_list && file.dump_token_list.has_value()) {
             std::cout << "Tokens:\n";
             for (auto& token : std::any_cast<std::vector<core::token>>(file.dump_token_list)) {

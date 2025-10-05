@@ -46,6 +46,8 @@ namespace licanapi {
         // Absolute path
         const std::string entry_point_path;
 
+        // To see initialization of the following properties, check licanapi.cc
+
         const bool _dump_token_list = false;
         const bool _dump_ast = false;
         const bool _dump_logs = false;

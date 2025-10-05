@@ -16,9 +16,14 @@ bool core::ast::ast_arena::is_expression_wrappable(const t_node_id id) {
     return false;
 }
 
-// Transparency note:
-// Individual cases in this function were initially written to be functions in each ast node.
-// Copilot was used to transfer the contents of those functions into one giant one for the arena struct.
+/* 
+
+Transparency note:
+Individual cases in this function were initially written to be functions in each ast node.
+Copilot was used to transfer the contents of those functions into one giant one for the arena struct.
+
+*/
+
 void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_id id, std::string& buffer, uint8_t indent) {
     const arena_node& an = node_list[id];
     const node* base = get_base_ptr(id);
@@ -102,14 +107,14 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent+1) + "default_value:\n";
             pretty_debug(process, v.default_value, buffer, indent+2);
             buffer += liutil::indent_repeat(indent+1) + "type:\n";
-            pretty_debug(process, v.type, buffer, indent+2);
+            pretty_debug(process, v.value_type, buffer, indent+2);
             break;
         }
         case node_type::EXPR_FUNCTION: {
             const auto& v = std::get<expr_function>(an._raw);
             buffer += liutil::indent_repeat(indent) + "expr_function\n";
-            buffer += liutil::indent_repeat(indent+1) + "type_parameter_list:\n";
-            for (const t_node_id& p : v.type_parameter_list) pretty_debug(process, p, buffer, indent+2);
+            buffer += liutil::indent_repeat(indent+1) + "template_parameter_list:\n";
+            for (const t_node_id& p : v.template_parameter_list) pretty_debug(process, p, buffer, indent+2);
 
             buffer += liutil::indent_repeat(indent+1) + "parameter_list:\n";
             for (const t_node_id& p : v.parameter_list) pretty_debug(process, p, buffer, indent+2);
@@ -125,8 +130,8 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent) + "expr_call\n";
             buffer += liutil::indent_repeat(indent+1) + "callee:\n";
             pretty_debug(process, v.callee, buffer, indent+2);
-            buffer += liutil::indent_repeat(indent+1) + "type_argument_list:\n";
-            for (const t_node_id& a : v.type_argument_list) pretty_debug(process, a, buffer, indent+2);
+            buffer += liutil::indent_repeat(indent+1) + "template_argument_list:\n";
+            for (const t_node_id& a : v.template_argument_list) pretty_debug(process, a, buffer, indent+2);
 
             buffer += liutil::indent_repeat(indent+1) + "argument_list:\n";
             for (const t_node_id& a : v.argument_list) pretty_debug(process, a, buffer, indent+2);
@@ -206,7 +211,7 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             buffer += liutil::indent_repeat(indent+1) + "name:\n";
             pretty_debug(process, v.name, buffer, indent+2);
             buffer += liutil::indent_repeat(indent+1) + "type:\n";
-            pretty_debug(process, v.type, buffer, indent+2);
+            pretty_debug(process, v.value_type, buffer, indent+2);
             buffer += liutil::indent_repeat(indent+1) + "value:\n";
             pretty_debug(process, v.value, buffer, indent+2);
             break;
@@ -221,7 +226,7 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
             for (const t_node_id& a : v.parameter_list) pretty_debug(process, a, buffer, indent+2);
 
             buffer += liutil::indent_repeat(indent+1) + "type:\n";
-            pretty_debug(process, v.type, buffer, indent+2);
+            pretty_debug(process, v.type_value, buffer, indent+2);
 
             break;
         }
@@ -235,21 +240,3 @@ void core::ast::ast_arena::pretty_debug(const liprocess& process, const t_node_i
         }
     }
 }
-
-// void core::ast::ast_arena::pretty_debug(const liprocess& process, const node* n, std::string& buffer, uint8_t indent = 0) const {
-//     if (n == nullptr) {
-//         buffer += liutil::indent_repeat(indent) + "<null node>\n";
-//         return;
-//     }
-
-//     // Find the matching stored node by pointer comparison.
-//     for (node_id i = 0; i < node_list.size(); ++i) {
-//         if (get_base_ptr(i) == n) {
-//             pretty_debug(process, i, buffer, indent);
-//             return;
-//         }
-//     }
-
-//     // Not found in arena: fallback to printing basic info using type field.
-//     buffer += liutil::indent_repeat(indent) + "<external node type=" + std::to_string(static_cast<int>(n->type)) + ">\n";
-// }

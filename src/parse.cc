@@ -8,7 +8,7 @@ All nodes are refered to as items unless
     - It is an expression that can not stand independently by design
     - It is only usable within function bodies
 
-Expression nodes can stand independent in an item or statement wrapper if certain conditions are met (check ast.cpp/is_expression_wrappable)
+Expression nodes can stand independent in an item or statement wrapper if certain conditions are met (check ast.cc/is_expression_wrappable)
 
 Statement nodes are items that can only exist in function bodies.
 
@@ -80,7 +80,7 @@ static const t_token_set binary_scope_resolution_set = {
 };
 
 static const t_token_set binary_member_access_set = {
-    core::token_type::DOT
+    core::token_type::DOT,
 };
 
 static const t_token_set unary_post_set = {
@@ -89,11 +89,20 @@ static const t_token_set unary_post_set = {
 };
 
 static const t_token_set unary_pre_set = {
-    core::token_type::MINUS,
-    core::token_type::BANG,
+    core::token_type::MINUS, // negate
+    core::token_type::BANG, // not
     core::token_type::DOUBLE_PLUS,
-    core::token_type::DOUBLE_MINUS
+    core::token_type::DOUBLE_MINUS,
+    core::token_type::AT, // address of
+    core::token_type::ASTERISK // derference
 };
+
+/*
+
+dec x: i32 = 5
+
+
+*/
 
 static const t_token_set binary_exponential_set = {
     core::token_type::CARET
@@ -188,7 +197,7 @@ struct parse_state {
     inline const core::token& expect(const core::token_type type, const std::string& error_message = "[No Info]") {
         const core::token& now = next();
         if (now.type != type)
-            log_and_pause_errors(core::lilog::log_level::ERROR, now.selection, "Unexpected token: " + error_message);
+            log_and_pause_errors(core::lilog::log_level::ERROR, now.selection, "Unexpected token - " + error_message);
        
         // We expect to return an incorrect token.
         // Since the parser handles tokens by reference, it is not a good idea to make new temporary ones.
@@ -215,52 +224,47 @@ static core::ast::t_node_id parse_optional_type(parse_state& state) {
     return state.arena.insert(core::ast::expr_none(state.now().selection));
 }
 
-template <typename FUNC>
-static core::ast::t_node_id binary_expression_left_associative(parse_state& state, const FUNC& lower, const t_token_set& set) {
+template <bool RIGHT_ASSOCIATION, typename FUNC>
+static core::ast::t_node_id binary_expression_associative(parse_state& state, const FUNC& lower, const t_token_set& set) {
     core::ast::t_node_id left = lower(state);
 
-    while (!state.at_eof() && set.find(state.now().type) != set.end()) {
-        const core::token& opr = state.next();
-        const core::ast::t_node_id right = lower(state);
-
-        left = state.arena.insert(core::ast::expr_binary(
-            core::lisel(state.arena.get_base_ptr(left)->selection, state.arena.get_base_ptr(right)->selection),
-            left,
-            right,
-            opr
-        ));
+    // Braces are required for outer if-constexpr so the else doesn't get captured by the inner if statement.
+    if constexpr (RIGHT_ASSOCIATION) {
+        if (!state.at_eof() && set.find(state.now().type) != set.end()) {
+            const core::token& opr = state.next();
+            const core::ast::t_node_id right = binary_expression_associative<true>(state, lower, set);
+        
+            return state.arena.insert(core::ast::expr_binary(
+                core::lisel(state.arena.get_base_ptr(left)->selection, state.arena.get_base_ptr(right)->selection),
+                left,
+                right,
+                opr
+            ));
+        }
     }
+    else
+        while (!state.at_eof() && set.find(state.now().type) != set.end()) {
+            const core::token& opr = state.next();
+            const core::ast::t_node_id right = lower(state);
+
+            left = state.arena.insert(core::ast::expr_binary(
+                core::lisel(state.arena.get_base_ptr(left)->selection, state.arena.get_base_ptr(right)->selection),
+                left,
+                right,
+                opr
+            ));
+        }
 
     return left;
 }
 
-template <typename FUNC>
-static core::ast::t_node_id binary_expression_right_associative(parse_state& state, const FUNC& lower, const t_token_set& set) {
-    core::ast::t_node_id left = lower(state);
-
-    if (!state.at_eof() && set.find(state.now().type) != set.end()) {
-        const core::token& opr = state.next();
-
-        // recurse on *binary_expression* instead of just *lower*
-        const core::ast::t_node_id right = binary_expression_right_associative(state, lower, set);
-       
-        return state.arena.insert(core::ast::expr_binary(
-            core::lisel(state.arena.get_base_ptr(left)->selection, state.arena.get_base_ptr(right)->selection),
-            left,
-            right,
-            opr
-        ));
-    }
-
-    return left;
-}
-
-// FUNC can be used to make a list of identifiers or a list of type expressions.
 template <bool IS_OPTIONAL, bool USE_LIST_DELIMITER, typename FUNC>
 static core::ast::t_node_list parse_list(parse_state& state, FUNC func, const core::token_type left_delim, const core::token_type right_delim) {
     if (state.now().type != left_delim)
-        if constexpr (IS_OPTIONAL) return {};
-        else state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Expected an opening delimiter.");
+        if constexpr (IS_OPTIONAL) 
+            return {};
+        else
+            state.log_and_pause_errors(core::lilog::log_level::ERROR, state.now().selection, "Expected an opening delimiter.");
 
     if (state.peek(1).type == right_delim) {
         state.pos += 2;
@@ -275,14 +279,15 @@ static core::ast::t_node_list parse_list(parse_state& state, FUNC func, const co
             list.push_back(func(state));
         } while (!state.at_eof() && state.now().type == LIST_DELIMITER);
         state.expect(right_delim, "Expected a closing delimiter.");
+
+        return list;
     }
-    else {
-        state.pos++;
-        do {
-            list.push_back(func(state));
-        } while (!state.at_eof() && state.now().type != right_delim);
-        state.pos++;
-    }
+
+    state.pos++;
+    do {
+        list.push_back(func(state));
+    } while (!state.at_eof() && state.now().type != right_delim);
+    state.pos++;
 
     return list;
 }
@@ -305,7 +310,7 @@ static core::ast::t_node_id parse_expr_parameter(parse_state& state) {
     const core::token& start_token = state.now();
    
     const core::ast::t_node_id name = state.arena.insert(core::ast::expr_identifier(state.expect(core::token_type::IDENTIFIER, "Expected an identifier.").selection));
-    const core::ast::t_node_id type = parse_optional_type(state);
+    const core::ast::t_node_id value_type = parse_optional_type(state);
    
     core::ast::t_node_id default_value;
 
@@ -316,7 +321,7 @@ static core::ast::t_node_id parse_expr_parameter(parse_state& state) {
     else
         default_value = state.arena.insert(core::ast::expr_none(state.now().selection));
 
-    return state.arena.insert(core::ast::expr_parameter(core::lisel(start_token.selection, state.now().selection), name, default_value, type));
+    return state.arena.insert(core::ast::expr_parameter(core::lisel(start_token.selection, state.now().selection), name, default_value, value_type));
 }
 
 static core::ast::t_node_id parse_expr_identifier(parse_state& state) {
@@ -368,11 +373,11 @@ static core::ast::t_node_id parse_primary_expression(parse_state& state) {
 }
 
 static core::ast::t_node_id parse_scope_resolution(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_primary_expression, binary_scope_resolution_set);
+    return binary_expression_associative<false>(state, &parse_primary_expression, binary_scope_resolution_set);
 }
 
 static core::ast::t_node_id parse_member_access(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_scope_resolution, binary_member_access_set);
+    return binary_expression_associative<false>(state, &parse_scope_resolution, binary_member_access_set);
 }
 
 static core::ast::t_node_id parse_expr_call(parse_state& state) {
@@ -414,31 +419,31 @@ static core::ast::t_node_id parse_expr_unary(parse_state& state) {
 }
 
 static core::ast::t_node_id parse_exponential(parse_state& state) {
-    return binary_expression_right_associative(state, &parse_expr_unary, binary_exponential_set);
+    return binary_expression_associative<true>(state, &parse_expr_unary, binary_exponential_set);
 }
 
 static core::ast::t_node_id parse_multiplicative(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_exponential, binary_multiplicative_set);
+    return binary_expression_associative<false>(state, &parse_exponential, binary_multiplicative_set);
 }
 
 static core::ast::t_node_id parse_additive(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_multiplicative, binary_additive_set);
+    return binary_expression_associative<false>(state, &parse_multiplicative, binary_additive_set);
 }
 
 static core::ast::t_node_id parse_numeric_comparison(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_additive, binary_numeric_comparison_set);
+    return binary_expression_associative<false>(state, &parse_additive, binary_numeric_comparison_set);
 }
 
 static core::ast::t_node_id parse_direct_comparison(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_numeric_comparison, binary_direct_comparison_set);
+    return binary_expression_associative<false>(state, &parse_numeric_comparison, binary_direct_comparison_set);
 }
 
 static core::ast::t_node_id parse_and(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_direct_comparison, binary_and_set);
+    return binary_expression_associative<false>(state, &parse_direct_comparison, binary_and_set);
 }
 
 static core::ast::t_node_id parse_or(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_and, binary_or_set);
+    return binary_expression_associative<false>(state, &parse_and, binary_or_set);
 }
 
 static core::ast::t_node_id parse_expr_ternary(parse_state& state) {
@@ -455,7 +460,7 @@ static core::ast::t_node_id parse_expr_ternary(parse_state& state) {
 }
 
 static core::ast::t_node_id parse_assignment(parse_state& state) {
-    return binary_expression_left_associative(state, &parse_expr_ternary, binary_assignment_set);
+    return binary_expression_associative<false>(state, &parse_expr_ternary, binary_assignment_set);
 }
 
 // Entry point to pratt parser design
@@ -540,7 +545,7 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
     const core::token& start_token = state.next();
    
     const core::ast::t_node_id name = parse_scope_resolution(state);
-    const core::ast::t_node_id type = parse_optional_type(state);
+    const core::ast::t_node_id value_type = parse_optional_type(state);
 
     core::ast::t_node_id value;
 
@@ -563,7 +568,7 @@ static core::ast::t_node_id parse_variant_declaration(parse_state& state, const 
             value = state.arena.insert(core::ast::expr_none(state.now().selection));
     }
 
-    return state.arena.insert(core::ast::variant_declaration(core::lisel(start_token.selection, state.now().selection), name, value, type));
+    return state.arena.insert(core::ast::variant_declaration(core::lisel(start_token.selection, state.now().selection), name, value, value_type));
 }
 
 static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
@@ -574,9 +579,9 @@ static core::ast::t_node_id parse_item_type_declaration(parse_state& state) {
 
     state.expect(core::token_type::EQUAL, "Expected '='.");
 
-    const core::ast::t_node_id value = parse_expr_type(state);
+    const core::ast::t_node_id type_value = parse_expr_type(state);
 
-    return state.arena.insert(core::ast::item_type_declaration(core::lisel(start_token.selection, state.now().selection), name, value, std::move(parameter_list)));
+    return state.arena.insert(core::ast::item_type_declaration(core::lisel(start_token.selection, state.now().selection), name, type_value, std::move(parameter_list)));
 }
 
 // Find statements expected in a module or a struct.

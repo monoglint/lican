@@ -51,12 +51,12 @@ namespace core {
             ITEM_MODULE,
             VARIANT_DECLARATION,
             ITEM_TYPE_DECLARATION,
+            ITEM_COMPONENT_DECLARATION,
             ITEM_INVALID,
         };
 
         using t_node_id = size_t;
         using t_node_list = std::vector<t_node_id>;
-        struct ast_arena;
         
         struct node {
             node(const core::lisel& selection, const node_type type)
@@ -64,10 +64,6 @@ namespace core {
 
             node_type type;
             core::lisel selection;
-
-            inline virtual void pretty_debug(const liprocess& process, const ast_arena& arena, std::string& buffer, uint8_t indent = 0) const {
-                buffer += '\n';
-            }
         };
 
         struct ast_root : node {
@@ -98,6 +94,7 @@ namespace core {
             bool is_pointer;
         };
 
+        // Get identifier contents by observing its selection in the source code.
         struct expr_identifier : node {
             expr_identifier(const core::lisel& selection)
                 : node(selection, node_type::EXPR_IDENTIFIER) {}
@@ -112,10 +109,10 @@ namespace core {
                 NIL,
             };
 
-            expr_literal(const core::lisel& selection, const literal_type type)
-                : node(selection, node_type::EXPR_LITERAL), type(type) {}
+            expr_literal(const core::lisel& selection, const literal_type value_type)
+                : node(selection, node_type::EXPR_LITERAL), value_type(value_type) {}
 
-            literal_type type;
+            literal_type value_type;
         };
 
         struct expr_unary : node {
@@ -146,30 +143,30 @@ namespace core {
         };
         
         struct expr_parameter : node {
-            expr_parameter(const core::lisel& selection, t_node_id name, t_node_id default_value, t_node_id type)
-                : node(selection, node_type::EXPR_PARAMETER), name(name), default_value(default_value), type(type) {}
+            expr_parameter(const core::lisel& selection, t_node_id name, t_node_id default_value, t_node_id value_type)
+                : node(selection, node_type::EXPR_PARAMETER), name(name), default_value(default_value), value_type(value_type) {}
 
             t_node_id name;
             t_node_id default_value;
-            t_node_id type;
+            t_node_id value_type;
         };
 
         struct expr_function : node {
-            expr_function(const core::lisel& selection, t_node_list&& type_parameter_list, t_node_list&& parameter_list, t_node_id body, t_node_id return_type)
-                : node(selection, node_type::EXPR_FUNCTION), type_parameter_list(std::move(type_parameter_list)), parameter_list(std::move(parameter_list)), body(body), return_type(return_type) {}
+            expr_function(const core::lisel& selection, t_node_list&& template_parameter_list, t_node_list&& parameter_list, t_node_id body, t_node_id return_type)
+                : node(selection, node_type::EXPR_FUNCTION), template_parameter_list(std::move(template_parameter_list)), parameter_list(std::move(parameter_list)), body(body), return_type(return_type) {}
 
-            t_node_list type_parameter_list;
+            t_node_list template_parameter_list;
             t_node_list parameter_list;
             t_node_id body;
             t_node_id return_type;
         };
 
         struct expr_call : node {
-            expr_call(const core::lisel& selection, t_node_id callee, t_node_list&& type_argument_list, t_node_list&& argument_list)
-                : node(selection, node_type::EXPR_CALL), callee(callee), type_argument_list(std::move(type_argument_list)), argument_list(std::move(argument_list)) {}
+            expr_call(const core::lisel& selection, t_node_id callee, t_node_list&& template_argument_list, t_node_list&& argument_list)
+                : node(selection, node_type::EXPR_CALL), callee(callee), template_argument_list(std::move(template_argument_list)), argument_list(std::move(argument_list)) {}
 
             t_node_id callee;
-            t_node_list type_argument_list;
+            t_node_list template_argument_list;
             t_node_list argument_list;
         };
         
@@ -242,22 +239,49 @@ namespace core {
         };
 
         struct variant_declaration : node {
-            variant_declaration(const core::lisel& selection, t_node_id name, t_node_id value, t_node_id type)
-                : node(selection, node_type::VARIANT_DECLARATION), name(name), value(value), type(type) {}
+            variant_declaration(const core::lisel& selection, t_node_id name, t_node_id value, t_node_id value_type)
+                : node(selection, node_type::VARIANT_DECLARATION), name(name), value(value), value_type(value_type) {}
             
             t_node_id name;
             t_node_id value;
-            t_node_id type;
+            t_node_id value_type;
         };
 
         struct item_type_declaration : node {
-            item_type_declaration(const core::lisel& selection, t_node_id name, t_node_id type, t_node_list&& parameter_list)
-                : node(selection, node_type::ITEM_TYPE_DECLARATION), name(name), type(type), parameter_list(std::move(parameter_list)) {}
+            item_type_declaration(const core::lisel& selection, t_node_id name, t_node_id type_value, t_node_list&& parameter_list)
+                : node(selection, node_type::ITEM_TYPE_DECLARATION), name(name), type_value(type_value), parameter_list(std::move(parameter_list)) {}
             
             t_node_id name;
-            t_node_id type;
+            t_node_id type_value;
             t_node_list parameter_list; // typedec resizable_with_array_with_t<T> = resizable<array<T>>
         };
+
+            struct item_struct_member : node {
+                t_node_id name;
+                t_node_id value_type;
+                t_node_id default_value;
+
+                bool is_internal;
+            };
+
+            enum class lifecycle_member_type {
+                CONSTRUCTOR,
+                DESTRUCTOR,
+            };
+
+            struct item_struct_lifecycle_member : node {
+                t_node_id name;
+                lifecycle_member_type lifecycle_type;
+            };
+
+            struct item_struct_declaration : node {
+                t_node_id name;
+                t_node_id constructors;
+
+                t_node_list template_parameter_list;
+                t_node_list member_list; // item_struct_member
+                t_node_list lifecycle_member_list;
+            };
 
         struct item_invalid : node {
             item_invalid(const core::lisel& selection)

@@ -1,0 +1,92 @@
+use "std/hashmap"
+
+dec __REF_CACHE = alloc hashmap[u64, u16]()
+
+;;
+
+semantic note
+
+    @ - pointer to *type*
+    ~ - internal type - struct level encapsulation
+    + - constructor
+    - - destructor
+    # - mutable type
+
+- alloc - compile-time keyword that allocates the given instantiated instance to the heap and returns its address
+- bit_cast - compile-time function that does not modify runtime-data but just retypes it. technically unsafe, but who cares
+
+- since i am still on the fence about adding namespace or global level encapsulation, i made __REF_CACHE named that way
+- just to kind of ward off people from thinking "oh yeah i can edit this"
+
+- vmcall is going to be a compile-time keyword that can call c++ functions that already exist in the vm
+
+- constructors can have their own names, but if you leave the constructor with just a +() {}, then
+  you can instantiate that struct by just calling its symbol as a function like in C++
+
+behavior note
+
+- the vm uses mutexes for the heap so we don't need to care about thread safety at all
+
+philosophies
+- i am a high school solo developer, not a team of professionals. everything in this langauge has to make sense to me
+- the programmer has as much control as they can. if they shoot themselves in the foot, it's on them
+    - the only compiler-enforced encapsulation is struct-based (~ qualifier) because i think all other levels of
+      encapsulation might be too much. i made a note a dozen or so lines up about whether or not i will keep this concept
+- the programmer can run on all platforms (that support a 64 bit vm), which is why you can safely assume a pointer can cast to u64
+;;
+
+struct ref[T]{
+    ; Copy constructor
+    +(other: ref[T]) {
+        construct(other.get())
+    }
+
+    +(value: #@T) {
+        construct(value)
+    }
+
+    ; Shared function that is called by the other two constructors
+    ~construct(ptr: #@T) {
+        _raw = value
+
+        ; Yes, the getter of the pointer can unlock it, but whose fault is it now if it dangles?
+        ; if you shoot yourself in the foot (vmcall unlock_ptr), it's your fault
+        vmcall lock_ptr(_raw)
+
+        dec as_num = bit_cast[u64](value)
+        
+        if (!__REF_CACHE.has(as_num))
+            __REF_CACHE.insert(as_num, 1)
+        else
+            __REF_CACHE.set(as_num, __REF_CACHE.get(as_num) + 1)
+    }
+
+    - {
+        dec as_num = bit_cast[u64](_raw)
+
+        __REF_CACHE.set(as_num, __REF_CACHE.get(as_num) - 1)
+
+        if __REF_CACHE.get(as_num) == 0 {
+            vmcall unlock_ptr(_raw)
+            free(_raw)
+            __REF_CACHE.remove(as_num)
+        }
+    }
+
+    get(): #@T {
+        return _raw
+    }
+
+    ~_raw: #@T
+}
+
+;;
+
+usage:
+dec my_color = ref(alloc color(255, 255, 255))
+my_color._raw->r = 200
+
+dec my_other_color = ref(alloc color::from_hex("ff0000"))
+my_other_color._raw->r = 50
+
+;;

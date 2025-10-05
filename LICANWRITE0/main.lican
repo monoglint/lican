@@ -1,1 +1,1 @@
-module math {	dec fib[T](n: T): T		if (n < 2)			return n		else			return fib(n - 1) + fib(n - 2)}dec main() {	dec i = 0	while i < 20 {		io::write(fib[u8](i))		i++	}}
+use "std/io"module math {	dec fib[T](n: T): T		if (n < 2)			return n		else			return fib(n - 1) + fib(n - 2)}dec main() {	io::write("Hello world!")	dec i = 0	while i < 20 {		io::write(fib[u8](i))		i++	}}
