@@ -37,8 +37,15 @@ static const std::unordered_map<std::string, core::token_type> token_keyword_map
     {"nil", core::token_type::NIL},
     {"use", core::token_type::USE},
     {"struct", core::token_type::STRUCT},
-    {"component", core::token_type::COMPONENT},
+    {"enum", core::token_type::ENUM},
     {"module", core::token_type::MODULE},
+
+    {"const", core::token_type::CONST},
+
+    {"ctor", core::token_type::CTOR},
+    {"dtor", core::token_type::DTOR},
+    {"priv", core::token_type::PRIV},
+    {"opr", core::token_type::OPR},
 };
 
 static const std::unordered_map<std::string, core::token_type> token_double_character_map = {
@@ -57,6 +64,9 @@ static const std::unordered_map<std::string, core::token_type> token_double_char
     {"^=", core::token_type::CARET_EQUAL},
     {"++", core::token_type::DOUBLE_PLUS},
     {"--", core::token_type::DOUBLE_MINUS},
+    {"..", core::token_type::DOUBLE_DOT},
+    {"->", core::token_type::RPTR},
+    {"<-", core::token_type::LPTR},
 };
 
 static const std::unordered_map<char, core::token_type> token_character_map = {
@@ -84,6 +94,7 @@ static const std::unordered_map<char, core::token_type> token_character_map = {
     {'>', core::token_type::RARROW},
     {'@', core::token_type::AT},
     {'#', core::token_type::POUND},
+    {'~', core::token_type::TILDE},
 };
 
 struct lex_state {
@@ -99,7 +110,7 @@ struct lex_state {
         return file.source_code[pos];
     }
 
-    inline char next() {
+    inline char consume() {
         if (now() == '\n') 
             file.line_marker_list.push_back(pos);
 
@@ -126,6 +137,8 @@ struct lex_state {
     inline core::lisel get_selection() const {
         return core::lisel(file_id, pos);
     }
+
+    std::string buffer;
 };
 
 bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id) {
@@ -138,30 +151,30 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
         char current_char = state.now();
 
         if (liutil::is_whitespace(current_char)) {
-            state.next();
+            state.consume();
             continue;
         }
 
         if (current_char == ';') {
-            state.next();
+            state.consume();
             if (state.now() == ';') {
-                state.next();
+                state.consume();
                 while (!state.at_eof() && !(state.now() == ';' && state.peek(1) == ';'))
-                    state.next();
+                    state.consume();
 
                 if (state.at_eof())
                     process.add_log(lilog::log_level::ERROR, state.get_selection(), "Unending multiline comment.");
                 else {
-                    state.next(); // skip ';;'
-                    state.next(); 
+                    state.consume(); // skip ';;'
+                    state.consume(); 
                 }
             }
             else {
                 // Single-line comment: skip until end of line or file
                 while (!state.at_eof() && state.now() != '\n')
-                    state.next();
+                    state.consume();
                 if (!state.at_eof())
-                    state.next(); // skip the newline character
+                    state.consume(); // skip the newline character
             }
             continue;
         }
@@ -170,21 +183,21 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
         if (current_char == '"') {
             core::t_pos start_pos = state.pos;
 
-			state.next();
+			state.consume();
 			
 			while (!state.at_eof() && state.now() != '"') {
-				state.next();
+				state.consume();
 			}
 
 			if (state.at_eof()) {
                 process.add_log(lilog::log_level::ERROR, state.get_selection(), "Unterminated string literal.");
 
-				break;
+				continue;
 			}
 
             token_list.emplace_back(token_type::STRING, lisel(state.file_id, start_pos, state.pos));
 
-            state.next();
+            state.consume();
 
             continue;
 		}
@@ -194,11 +207,11 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			core::t_pos start_pos = state.pos;
 			bool used_dot = current_char == '.';
 
-            state.next();
+            state.consume();
 
 			while (!state.at_eof()) {
                 if (std::isdigit(state.now())) {
-                    state.next();
+                    state.consume();
                     continue;
                 }
 
@@ -207,7 +220,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
                         process.add_log(lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can only have one decimal.");
 
                     used_dot = true;
-                    state.next();
+                    state.consume();
                     continue;
                 }
 
@@ -217,7 +230,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
             if (state.peek(-1) == '.')
                 process.add_log(lilog::log_level::ERROR, lisel(state.file_id, state.pos), "A number can't end with a deciaml point.");
 
-            token_list.emplace_back(token_type::NUMBER, lisel(state.file_id, start_pos, state.pos - 1));
+            token_list.emplace_back(used_dot ? token_type::FLOAT : token_type::INT, lisel(state.file_id, start_pos, state.pos - 1));
 
 			continue;
 		}
@@ -227,15 +240,15 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			core::t_pos start_pos = state.pos;
 
 			while (!state.at_eof() && (std::isalnum(state.now()) || state.now() == '_')) {
-				state.next();
+				state.consume();
 			}
 
 			lisel selection(state.file_id, start_pos, state.pos - 1);
 
-			std::string identifier_string = process.sub_source_code(selection);
+			state.buffer = process.sub_source_code(selection);
 			
-			if (token_keyword_map.find(identifier_string) != token_keyword_map.end()) {
-                token_list.emplace_back(token_keyword_map.at(identifier_string), selection);
+			if (token_keyword_map.find(state.buffer) != token_keyword_map.end()) {
+                token_list.emplace_back(token_keyword_map.at(state.buffer), selection);
                 continue;
 			}
 
@@ -244,11 +257,15 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 			continue;
 		}
 
-        // Double character tokens.
-		if (!state.at_eof() && token_double_character_map.find(std::string{current_char, state.peek()}) != token_double_character_map.end()) {
-            token_list.emplace_back(token_double_character_map.at(std::string{current_char, state.peek()}), lisel(state.file_id, state.pos, state.pos + 1));
+        state.buffer.resize(2);
+        state.buffer[0] = current_char;
+        state.buffer[1] = state.peek();
 
-            state.next(); state.next();
+        // Double character tokens.
+		if (!state.at_eof() && token_double_character_map.find(state.buffer) != token_double_character_map.end()) {
+            token_list.emplace_back(token_double_character_map.at(state.buffer), lisel(state.file_id, state.pos, state.pos + 1));
+
+            state.consume(); state.consume();
 			continue;
 		}
 
@@ -256,7 +273,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 		if (token_character_map.find(current_char) != token_character_map.end()) {
             token_list.emplace_back(token_character_map.at(current_char), state.get_selection());
 
-			state.next();
+			state.consume();
 			continue;
 		}
 
@@ -264,7 +281,7 @@ bool core::frontend::lex(core::liprocess& process, const core::t_file_id file_id
 
         token_list.emplace_back(token_type::INVALID, state.get_selection());
 
-        state.next();
+        state.consume();
     }
 
     token_list.emplace_back(token_type::_EOF, state.get_selection());

@@ -1,3 +1,5 @@
-dec my_number = 5
-dec ptr_to: @i32 = @my_number
-dec dereference: i32 = 5 + *ptr_to
+; Basic boilerplate
+
+dec main() {
+    io..write("Hello world")
+}

@@ -10,14 +10,10 @@ namespace core {
         _EOF,
 
         IDENTIFIER,
-        NUMBER,
+        INT,
+        FLOAT,
         STRING,
         CHAR,
-
-        MUT,
-
-        STRUCT,
-        COMPONENT,
 
         TRUE,
         FALSE,
@@ -35,7 +31,16 @@ namespace core {
         // Variable and function declaration
         DEC,
         TYPEDEC,
-        
+        STRUCT,
+        ENUM,
+
+        CONST,
+
+        CTOR,
+        DTOR,
+        PRIV,
+        OPR,
+ 
         USE,
 
         COLON,
@@ -49,6 +54,7 @@ namespace core {
         SLASH,
         PERCENT,
         CARET,
+        TILDE,
 
         COMMA,
         DOT,
@@ -59,6 +65,7 @@ namespace core {
         PIPE,
         QUESTION,
 
+        DOUBLE_DOT,
         DOUBLE_AMPERSAND,
         DOUBLE_PIPE,
         DOUBLE_COLON,
@@ -87,6 +94,8 @@ namespace core {
         RARROW,
         LSQUARE,
         RSQUARE,
+        LPTR,
+        RPTR,
     };
 
     struct token {

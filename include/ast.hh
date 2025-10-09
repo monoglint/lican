@@ -52,9 +52,13 @@ namespace core {
             VARIANT_DECLARATION,
             ITEM_TYPE_DECLARATION,
 
-            EXPR_STRUCT_MEMBER,
-            EXPR_STRUCT_OPERATOR,
-            EXPR_STRUCT_LIFECYCLE_MEMBER,
+            EXPR_PROPERTY,
+            EXPR_METHOD,
+            EXPR_OPERATOR,
+            EXPR_INITIALIZER_SET,
+            EXPR_CONSTRUCTOR,
+            EXPR_DESTRUCTOR,
+
             ITEM_STRUCT_DECLARATION,
 
             EXPR_ENUM_SET,
@@ -92,14 +96,22 @@ namespace core {
         };
 
         struct expr_type : node {
-            expr_type(const core::lisel& selection, const t_node_id source, t_node_list&& argument_list, const bool is_mutable, const bool is_pointer)
-                : node(selection, node_type::EXPR_TYPE), source(source), argument_list(std::move(argument_list)), is_mutable(is_mutable), is_pointer(is_pointer) {}
+            enum class e_reference_type : uint8_t {
+                NONE,
+                LVALUE,
+                RVALUE
+            };
+
+            expr_type(const core::lisel& selection, const t_node_id source, t_node_list&& argument_list, const bool is_const, const bool is_pointer, const e_reference_type reference_type)
+                : node(selection, node_type::EXPR_TYPE), source(source), argument_list(std::move(argument_list)), is_const(is_const), is_pointer(is_pointer), reference_type(reference_type) {}
             
-            t_node_id source; // Identifier or scope resolution
+            // expr_identifier | binary (scope_resolution)
+            t_node_id source; 
             t_node_list argument_list;
             
-            bool is_mutable;
+            bool is_const;
             bool is_pointer;
+            e_reference_type reference_type;
         };
 
         // Get identifier contents by observing its selection in the source code.
@@ -109,18 +121,19 @@ namespace core {
         };
 
         struct expr_literal : node {
-            enum class literal_type : uint8_t {
-                NUMBER,
+            enum class e_literal_type : uint8_t {
+                FLOAT,
+                INT,
                 STRING,
                 CHAR,
                 BOOL,
                 NIL,
             };
 
-            expr_literal(const core::lisel& selection, const literal_type value_type)
-                : node(selection, node_type::EXPR_LITERAL), value_type(value_type) {}
+            expr_literal(const core::lisel& selection, const e_literal_type literal_type)
+                : node(selection, node_type::EXPR_LITERAL), literal_type(literal_type) {}
 
-            literal_type value_type;
+            e_literal_type literal_type;
         };
 
         struct expr_unary : node {
@@ -264,66 +277,86 @@ namespace core {
             t_node_list parameter_list; // typedec resizable_with_array_with_t<T> = resizable<array<T>>
         };
 
-            // Properties & methods
-            struct expr_struct_member : node {
-                expr_struct_member(const core::lisel& selection, const t_node_id name, const t_node_id value_type, const t_node_id default_value, const bool is_internal)
-                    : node(selection, node_type::EXPR_STRUCT_MEMBER), name(name), value_type(value_type), default_value(default_value), is_internal(is_internal) {}
+            struct expr_property : node {
+                expr_property(const core::lisel& selection, const t_node_id name, const t_node_id value_type, const t_node_id default_value, const bool is_private)
+                    : node(selection, node_type::EXPR_PROPERTY), name(name), value_type(value_type), default_value(default_value), is_private(is_private) {}
 
                 t_node_id name;
                 t_node_id value_type;
                 t_node_id default_value;
 
-                bool is_internal;
+                bool is_private;
+            };
+
+            struct expr_method : node {
+                expr_method(const core::lisel& selection, const t_node_id name, const t_node_id function, const bool is_private, const bool is_const)
+                    : node(selection, node_type::EXPR_METHOD), name(name), function(function), is_private(is_private), is_const(is_const) {}
+
+                t_node_id name;
+                t_node_id function;
+
+                bool is_private;
+                bool is_const;
             };
             
-            struct expr_struct_operator : node {
-                expr_struct_operator(const core::lisel& selection, const core::token_type opr, const t_node_id function)
-                    : node(selection, node_type::EXPR_STRUCT_OPERATOR), opr(opr), function(function) {}
+            struct expr_operator : node {
+                expr_operator(const core::lisel& selection, const core::token_type opr, const t_node_id function, const bool is_const)
+                    : node(selection, node_type::EXPR_OPERATOR), opr(opr), function(function), is_const(is_const) {}
                     
                 core::token_type opr;
-                t_node_id function; // parser should syntactically ensure that the parameters to the function are semantically accurate
+                t_node_id function;
+                bool is_const;
             };
 
-            // Lifecycle specific methods
-            struct expr_struct_lifecycle_member : node {
-                enum class lifecycle_member_type {
-                    CONSTRUCTOR,
-                    COPY_CONSTRUCTOR,
-                    DESTRUCTOR,
-                };
+            struct expr_initializer_set : node {
+                expr_initializer_set(const core::lisel& selection, const t_node_id property_name, const t_node_id value)
+                    : node(selection, node_type::EXPR_INITIALIZER_SET), property_name(property_name), value(value) {}
 
-                expr_struct_lifecycle_member(const core::lisel& selection, const t_node_id name, const lifecycle_member_type lifecycle_type)
-                    : node(selection, node_type::EXPR_STRUCT_LIFECYCLE_MEMBER), name(name), lifecycle_type(lifecycle_type) {}
+                t_node_id property_name; // identifier
+                t_node_id value;
+            };
 
+            struct expr_constructor : node {
+                expr_constructor(const core::lisel& selection, const t_node_id name, const t_node_id function, t_node_list&& initializer_list)
+                    : node(selection, node_type::EXPR_CONSTRUCTOR), name(name), function(function), initializer_list(std::move(initializer_list)) {}
+                
                 t_node_id name;
-                lifecycle_member_type lifecycle_type;
+                t_node_id function;
+                t_node_list initializer_list; // expr_initializer_set
             };
 
-            struct item_struct_declaration : node {
-                item_struct_declaration(const core::lisel& selection, const t_node_id name, t_node_list&& template_parameter_list, t_node_list&& member_list)
-                    : node(selection, node_type::ITEM_STRUCT_DECLARATION), name(name), template_parameter_list(std::move(template_parameter_list)), member_list(std::move(member_list)) {}
+            struct expr_destructor : node {
+                expr_destructor(const core::lisel& selection, const t_node_id body)
+                    : node(selection, node_type::EXPR_DESTRUCTOR), body(body) {}
 
-                t_node_id name;
-
-                t_node_list template_parameter_list;
-                t_node_list member_list; // struct_member, operator_overload, or struct_lifecycle_member
+                t_node_id body;
             };
+
+        struct item_struct_declaration : node {
+            item_struct_declaration(const core::lisel& selection, const t_node_id name, t_node_list&& template_parameter_list, t_node_list&& member_list)
+                : node(selection, node_type::ITEM_STRUCT_DECLARATION), name(name), template_parameter_list(std::move(template_parameter_list)), member_list(std::move(member_list)) {}
+
+            t_node_id name;
+
+            t_node_list template_parameter_list;
+            t_node_list member_list; // struct_member | operator_overload | constructor | destructor
+        };
 
         
         struct expr_enum_set : node {
-            expr_enum_set(const core::lisel& selection, const t_node_id name, const t_node_id custom_value)
-                : node(selection, node_type::EXPR_ENUM_SET), name(name), custom_value(custom_value) {}
+            expr_enum_set(const core::lisel& selection, const t_node_id name, const t_node_id value)
+                : node(selection, node_type::EXPR_ENUM_SET), name(name), value(value) {}
 
             t_node_id name;
-            t_node_id custom_value;
+            t_node_id value;
         };
         
         struct item_enum : node {
             item_enum(const core::lisel& selection, const t_node_id name, t_node_list&& set_list)
-                : node(selection, node_type::EXPR_ENUM_SET), name(name), set_list(std::move(set_list)) {}
+                : node(selection, node_type::ITEM_ENUM), name(name), set_list(std::move(set_list)) {}
 
             t_node_id name;
-            t_node_list set_list;
+            t_node_list set_list; // expr_enum_set | expr_none
         };
 
         struct item_invalid : node {
@@ -365,10 +398,15 @@ namespace core {
                 variant_declaration,
                 item_type_declaration,
 
-                expr_struct_member,
-                expr_struct_operator,
-                expr_struct_lifecycle_member,
+                expr_property,
+                expr_method,
+                expr_operator,
+                expr_initializer_set,
+                expr_constructor,
+                expr_destructor,
                 item_struct_declaration,
+                expr_enum_set,
+                item_enum,
                 
                 item_invalid
             > _raw;
