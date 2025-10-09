@@ -1,5 +1,19 @@
 ; Basic boilerplate
 
+dec loop_fib(loops: u32): u32 {
+    dec a: u32 = 0
+    dec b: u32 = 1
+
+    dec i = 0
+    while i < loops {
+        dec c = b
+        b = a + b
+        a = c
+    }
+
+    return b
+}
+
 dec main() {
     io..write("Hello world")
 }

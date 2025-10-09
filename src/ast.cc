@@ -8,6 +8,11 @@ bool core::ast::ast_arena::is_expression_wrappable(const t_node_id id) {
             const token_type opr_type = ((expr_unary*)base)->opr.type;
             return opr_type == token_type::DOUBLE_PLUS || opr_type == token_type::DOUBLE_MINUS;
         }
+        case node_type::EXPR_BINARY: {
+            const token_type opr_type = ((expr_binary*)base)->opr.type;
+
+            return opr_type == token_type::EQUAL;
+        }
         case node_type::EXPR_CALL:
         case node_type::VARIANT_DECLARATION:
             return true;
